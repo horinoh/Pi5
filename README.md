@@ -66,3 +66,56 @@
         Username    <USER>
         Password    <PASS>
         ~~~
+## 更新
+- 更新
+    ~~~
+    $sudo apt update
+	$sudo apt full-upgrade
+    ~~~
+- ファームウェア確認
+    ~~~
+    $sudo rpi-eeprom-update
+    ~~~
+- ファームウェア更新
+    ~~~
+	$sudo rpi-eeprom-update -a
+    ~~~
+- 再起動
+    ~~~
+	$sudo reboot
+    ~~~
+
+## PCIe Gen 3.0 有効化
+- /boot/firmware/config.txt に以下の行を追記する
+    ~~~
+	dtparam=pciex1_gen=3
+    ~~~
+- 再起動
+    ~~~
+	$sudo reboot
+    ~~~
+- コンフィグ設定
+    ~~~
+	$sudo raspi-config - Advanced Options - PCIe Speed - Yes - Finish
+    ~~~
+- 再起動
+    ~~~
+	$sudo reboot
+    ~~~		
+
+## 他
+
+### [AI Kit](https://github.com/horinoh/Pi5/tree/master/AIKit)
+
+### emacs
+- インストール
+    ~~~
+    $sudo apt-get install -y emacs
+    ~~~
+- 設定
+    - ~/.emacs.d/init.el を作成
+        ~~~
+        ; バックアップを作らない
+        (setq make-backup-files nil)
+        (setq auto-save-default nil)
+        ~~~
