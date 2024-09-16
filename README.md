@@ -1,6 +1,6 @@
 # Pi5
 
-## 初期設定
+## 初期設定 (ヘッドレス)
 
 ### SD 作成 (PC)
 - [Disk Imager](https://www.raspberrypi.com/software/) をダウンロードし、インストール、起動
@@ -36,17 +36,24 @@
     - 起動するまでしばらく待つ
 
 ### SSH 接続 (PC)
+#### Power Shell の場合
+- Power Shell から以下のようにする
+    ~~~
+    $ssh <USER>@raspberrypi.local
+    $<USER>@raspberrypi.local's password:<PASS>
+    ~~~
+#### TeraTerm の場合
 - [TeraTerm](https://teratermproject.github.io/) をダウンロード、インストール、起動
-- ファイル - 新しい接続 - 以下のようにして OK
-    ~~~
-    ホスト      raspberrypi.local
-    サービス    SSH にチェック
-    ~~~
-- ユーザ名とパスワードを求められるので以下のようにする
-    ~~~
-    ユーザ名    <USER>
-    パスワード  <PASS>
-    ~~~
+    - ファイル - 新しい接続 - 以下のようにして OK
+        ~~~
+        ホスト      raspberrypi.local
+        サービス    SSH にチェック
+        ~~~
+    - ユーザ名とパスワードを求められるので以下のようにする
+        ~~~
+        ユーザ名    <USER>
+        パスワード  <PASS>
+        ~~~
 
 ### VNC 接続
 - VNC を有効にする (Pi5)
@@ -103,7 +110,79 @@
 	$sudo reboot
     ~~~		
 
-## 他
+## Apt
+### list
+- パッケージ一覧
+    ~~~
+    $apt list
+    ~~~
+- インストール済みパッケージ一覧
+    ~~~
+    $apt list --installed
+    ~~~
+### show
+- パッケージ情報を表示
+    ~~~
+    $apt show XXX
+    ~~~
+### install
+- インストール
+    ~~~
+    $sudo apt install -y XXX
+    ~~~
+### remove
+- アンインストール
+    ~~~
+    $sudo apt remove XXX
+    ~~~
+### update
+- パッケージのインデックスファイルを更新
+    ~~~
+    $sudo apt full-upgrade
+    ~~~
+### full-upgrade
+- インストール済みのパッケージを更新、(必要に応じて)削除
+    ~~~
+    $sudo apt full-upgrade
+    ~~~
+
+## [状態調査 vcgencmd](https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd)
+- 例
+    ~~~
+    $vcgencmd measure_clock arm
+    $vcgencmd measure_clock core
+    $vcgencmd measure_temp
+    $vcgencmd measure_volts
+    $vcgencmd get_config total_mem
+    ~~~
+
+## カメラ
+- カメラをリストアップ
+    ~~~
+    $libcamera-hello --list-cameras
+    ~~~
+- プレビュー
+    ~~~
+    $libcamera-hello -t 5000
+    ~~~
+    - -t はプレビューの表示時間 (ms)、デフォルトは 5 秒、0 で無期限
+- 静止画を保存
+    ~~~
+    $libcamera-jpeg -o XXX.jpg
+    $libcamera-still -o XXX.jpg
+    $libcamera-still -e png -o XXX.png
+    ~~~
+- 動画を保存
+    ~~~
+    $libcamera-vid -t 5000 -o XXX.mpeg
+    $libcamera-vid -t 5000 -o XXX.mp4
+    ~~~
+    - 再生
+        ~~~
+        $vlc XXX.mpeg
+        ~~~
+
+## インストールソフト
 
 ### [AI Kit](https://github.com/horinoh/Pi5/tree/master/AIKit)
 
@@ -112,10 +191,72 @@
     ~~~
     $sudo apt-get install -y emacs
     ~~~
-- 設定
-    - ~/.emacs.d/init.el を作成
-        ~~~
-        ; バックアップを作らない
-        (setq make-backup-files nil)
-        (setq auto-save-default nil)
-        ~~~
+- 設定 (~/.emacs.d/init.el を作成)
+    ~~~
+    ; バックアップを作らない
+    (setq make-backup-files nil)
+    (setq auto-save-default nil)
+    ~~~
+
+### VSCode
+- インストール
+    ~~~
+    $suto apt install -y code
+    ~~~
+    
+### libvulkan-dev
+- インストール
+    ~~~
+    $sudo apt install -y libvulkan-dev
+    ~~~
+- 確認 (-lvulkan オプションをつけてコマンドが通るか)
+    ~~~
+    $g++ main.cpp -lvulkan -I/usr/include
+    ~~~
+
+### glslang-tools
+- インストール
+    ~~~
+    $sudo apt install -y glslang-tools
+    ~~~
+- 確認 (コマンドが通るか)
+    ~~~
+    $glslangValidator --help
+    ~~~
+
+### libglfw3-dev
+- インストール
+    ~~~
+    $sudo apt install -y libglfw3-dev
+    ~~~
+- 確認 (-lglfw オプションをつけてコマンドが通るか)
+    ~~~
+    $g++ main.cpp -lglfw
+    ~~~
+<!--
+- インストール
+    ~~~
+    $sudo apt install -y libglfw3
+    $sudo apt install -y libglfw3-wayland
+    ~~~
+    - libglfw3 と libglfw3-wayland はどちらか１つで良い?
+    - libglfw3-wayland だけ入れれば良い?
+-->
+
+### w3m
+- インストール
+    ~~~
+    $suto apt install -y w3m
+    ~~~
+
+### libvulkan1
+- デフォルトでインストールされる
+### meson
+- デフォルトでインストールされる
+### ninja
+- デフォルトでインストールされる
+### git
+- デフォルトでインストールされる
+
+### cmake
+- AI Kit セットアップでインストールされる
