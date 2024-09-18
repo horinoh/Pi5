@@ -228,6 +228,7 @@
 - インストール
     ~~~
     $sudo apt install -y libglfw3-dev
+    $sudo apt install -y libglfw3-wayland
     ~~~
 - 確認 (-lglfw オプションをつけてコマンドが通るか)
     ~~~
@@ -249,6 +250,34 @@
     $suto apt install -y w3m
     ~~~
 
+### samba
+- インストール
+    ~~~
+    $sudo apt install -y samba
+    ~~~
+- 設定 /etc/samba/smb.conf に以下を追記
+    ~~~
+    [share]
+    path = /home/<USER>/Share
+    browsable = yes                                                            
+    read only = no
+    guest ok = yes
+    guest only = yes
+    force user = <USER>
+    ~~~
+    - \<USER\> はインストール時に決めたもの
+- samba を再起動
+    ~~~
+    $sudo systemctl restart smbd
+    ~~~
+- Windows からアクセス
+    ~~~
+    \\raspberrypi\share
+    ~~~
+
+### cmake
+- AI Kit セットアップでインストールされる
+
 ### libvulkan1
 - デフォルトでインストールされる
 ### meson
@@ -257,6 +286,3 @@
 - デフォルトでインストールされる
 ### git
 - デフォルトでインストールされる
-
-### cmake
-- AI Kit セットアップでインストールされる

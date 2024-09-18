@@ -32,6 +32,13 @@
     ~~~
    - detection0.mp4 は download_resources.sh でダウンロードされる
 
+## サンプル
+- [サンプル](https://github.com/raspberrypi/rpicam-apps.git) をクローンする
+    ~~~
+    $cd rpicam-apps/
+    $libcamera-hello -t 0 --post-process-file assets/hailo_XXX.json --lores-width 640 --lores-height 640
+    ~~~
+
 <!--
     - デフォルトの入力は /dev/video0 (USB カメラ)、--input オプションで明示的に指定可能
         ~~~
@@ -44,6 +51,8 @@
         $ffplay -f v4l2 /dev/videoXX
         ~~~
 -->
+
+<!--
 ## 自前のポストプロセスを書く場合
 - [参考](https://github.com/hailo-ai/tappas/blob/master/docs/write_your_own_application/write-your-own-postprocess.rst)
 
@@ -51,6 +60,11 @@
 - [tappas](https://github.com/hailo-ai/tappas.git) をクローン
     ~~~
     $git clone https://github.com/hailo-ai/tappas.git
+    ~~~
+- インストール
+    ~~~
+    $cd tappas/
+    $./install.sh
     ~~~
 - core - hailo - libs - postprocess へ移動
     ~~~
@@ -83,13 +97,14 @@
         'my_post.cpp',
     ]
 
-    my_post_lib = shared_library('my_post',
+    shared_library('my_post',
         my_post_sources,
-        include_directories: [hailo_general_inc] + xtensor_inc,
-        dependencies : post_deps,
+        cpp_args : hailo_lib_args,
+        include_directories: [hailo_general_inc, include_directories('./')] + xtensor_inc,
+        dependencies : post_deps + [tracker_dep],
         gnu_symbol_visibility : 'default',
         install: true,
-        install_dir: post_proc_install_dir, 
+        install_dir: post_proc_install_dir,
     )
     ~~~
 - scripts/gstreamer/install_hailo_gstreamer.sh を実行
@@ -166,3 +181,4 @@
 ## サンプル
 - core/hailo/libs/postprocesses/ 以下を参考に自前で作成する
     - 深度推定のサンプルなら core/hailo/libs/postprocesses/depth_estimation
+-->
