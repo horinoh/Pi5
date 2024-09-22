@@ -38,7 +38,6 @@
     $cd rpicam-apps/
     $libcamera-hello -t 0 --post-process-file assets/hailo_XXX.json --lores-width 640 --lores-height 640
     ~~~
-
 <!--
     - デフォルトの入力は /dev/video0 (USB カメラ)、--input オプションで明示的に指定可能
         ~~~
@@ -50,6 +49,60 @@
         ~~~
         $ffplay -f v4l2 /dev/videoXX
         ~~~
+-->
+
+## HailoRT
+- [参考](https://www.macnica.co.jp/business/semiconductor/articles/hailo/145098/) 
+    - hef ファイルをデバイスに読み込んで推論する 
+- hef ファイルのパフォーマンス確認
+    ~~~
+    $hailortcli run XXX.hef
+    ~~~
+- hef ファイルのレイテンシ確認
+    ~~~
+    $hailortcli run XXX.hef --measure-latency
+    ~~~
+- hef ファイルの電力確認
+    ~~~
+    $hailortcli run XXX.hef --measure-power
+    ~~~
+
+### ライブラリ
+- ヘッダ
+    ~~~
+    /usr/include/hailo
+    ~~~
+- ライブラリ
+    ~~~
+    /usr/lib/libhailort.so
+    ~~~
+- ビルド例
+    ~~~
+    #include <hailo/hailort.h>
+    ~~~
+    ~~~
+    $g++ main.cpp -lhailort
+    ~~~
+
+### C/C++ サンプル
+- [参考 (入出力部分)](https://github.com/hailo-ai/hailort/tree/master/hailort/libhailort/examples)
+- [参考 (組み込み)](https://github.com/hailo-ai/Hailo-Application-Code-Examples/tree/main/runtime/cpp)
+
+<!--
+### HailoRT ビルド (Windowsの場合)
+- [HailoRT](https://github.com/hailo-ai/hailort.git) をクローン
+- CMake - Configure - Configure - Generate
+- HailoRT.sln を開いて ALLBUILD, INSTALL の Release をビルド、以下に作られる
+    - 実行ファイル      hailort/hailortcli/Release/hailortcli.exe
+    - 静的ライブラリ    hailort/libhailort/src/Release/libhailort.lib
+    - 動的ライブラリ    hailort/libhailort/src/Release/libhailort.dll
+- ここでは hailort/libhailort 以下に lib フォルダを作り、Release 以下をコピーした
+    - hailort/libhailort/lib/Release/libhailort.lib, libhailort.dll
+- ここでは hailort/libhailort を環境変数 HAILORT_SDK_PATH に設定した
+    ~~~
+    #include <hailo/hailort.h>
+    #pragma comment(lib, "libhailort.lib")
+    ~~~
 -->
 
 <!--

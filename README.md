@@ -103,14 +103,16 @@
     ~~~
 - コンフィグ設定
     ~~~
-	$sudo raspi-config - Advanced Options - PCIe Speed - Yes - Finish
+	$sudo raspi-config
     ~~~
+    - Advanced Options - PCIe Speed - Yes - Finish
 - 再起動
     ~~~
 	$sudo reboot
     ~~~		
 
 ## Apt
+
 ### list
 - パッケージ一覧
     ~~~
@@ -145,6 +147,13 @@
     ~~~
     $sudo apt full-upgrade
     ~~~
+
+## DPKG
+- インストール先の列挙
+    ~~~
+    $dpkg -L XXX
+    ~~~
+    - apt install XXX した名前 XXX
 
 ## [状態調査 vcgencmd](https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd)
 - 例
@@ -182,7 +191,7 @@
         $vlc XXX.mpeg
         ~~~
 
-## インストールソフト
+## インストールしたもの等
 
 ### [AI Kit](https://github.com/horinoh/Pi5/tree/master/AIKit)
 
@@ -224,11 +233,21 @@
     $glslangValidator --help
     ~~~
 
+### libglfw3, libglfw3-wayland
+- インストール
+    ~~~
+    $sudo apt install -y libglfw3
+    ~~~
+    or
+    ~~~
+    $sudo apt install -y libglfw3-wayland
+    ~~~
+    - 一方をインストールすると他方がアンインストールされる (排他)
+    
 ### libglfw3-dev
 - インストール
     ~~~
     $sudo apt install -y libglfw3-dev
-    $sudo apt install -y libglfw3-wayland
     ~~~
 - 確認 (-lglfw オプションをつけてコマンドが通るか)
     ~~~
@@ -277,6 +296,8 @@
 
 ### cmake
 - AI Kit セットアップでインストールされる
+### opencv
+- デフォルトでインストールされる? AI Kit セットアップでインストールされる?
 
 ### libvulkan1
 - デフォルトでインストールされる
@@ -286,3 +307,33 @@
 - デフォルトでインストールされる
 ### git
 - デフォルトでインストールされる
+
+## ビルド関連
+- Vulkan
+    ~~~
+    #include <vulkan/vulkan.h>
+    ~~~
+    ~~~
+    $g++ main.cpp -lvulkan
+    ~~~
+- Glfw
+    ~~~
+    #include <GLFW/glfw3.h>
+    ~~~
+    ~~~
+    $g++ main.cpp -lglfw
+    ~~~
+- OpenCV
+    ~~~
+    #include <opencv2/opencv.hpp>
+    ~~~
+    ~~~
+    $g++ main.cpp -lopencv_core -I/usr/include/opencv4
+    ~~~
+- HailoRT
+    ~~~
+    #include <hailo/hailort.h>
+    ~~~
+    ~~~
+    $g++ main.cpp -lhailort
+    ~~~
