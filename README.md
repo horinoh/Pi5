@@ -111,9 +111,9 @@
 	$sudo reboot
     ~~~		
 
-## Apt
-
-### list
+## コマンド等
+### apt
+#### list
 - パッケージ一覧
     ~~~
     $apt list
@@ -122,38 +122,44 @@
     ~~~
     $apt list --installed
     ~~~
-### show
+#### show
 - パッケージ情報を表示
     ~~~
     $apt show XXX
     ~~~
-### install
+#### install
 - インストール
     ~~~
     $sudo apt install -y XXX
     ~~~
-### remove
+#### remove
 - アンインストール
     ~~~
     $sudo apt remove XXX
     ~~~
-### update
+#### update
 - パッケージのインデックスファイルを更新
     ~~~
     $sudo apt full-upgrade
     ~~~
-### full-upgrade
+#### full-upgrade
 - インストール済みのパッケージを更新、(必要に応じて)削除
     ~~~
     $sudo apt full-upgrade
     ~~~
 
-## DPKG
+### DPKG
 - インストール先の列挙
     ~~~
     $dpkg -L XXX
     ~~~
     - apt install XXX した名前 XXX
+
+### Git
+- ファイルに実行権限を付ける
+    ~~~
+    $git update-index --chmod=+x XXX
+    ~~~
 
 ## [状態調査 vcgencmd](https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd)
 - 例
