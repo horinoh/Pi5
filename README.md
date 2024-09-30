@@ -300,6 +300,12 @@
     \\raspberrypi\share
     ~~~
 
+<!--
+### looking glass
+- [BridgeSDK](https://lookingglassfactory.com/software/looking-glass-bridge) をダウンロード、解凍、LookingGlassBridge-X.Y.Z-Linux.sh に実行権限を付けて実行する
+- バイナリファイルが含まれていて、Pi では動かないっぽい
+-->
+
 ### cmake
 - AI Kit セットアップでインストールされる
 ### opencv
@@ -313,6 +319,41 @@
 - デフォルトでインストールされる
 ### git
 - デフォルトでインストールされる
+- クローン
+    ~~~
+    $git clone --recursive https://XXX.YYY.ZZZ.git
+    ~~~
+- 設定
+    ~~~
+    $git config --global user.email "XXX@YYY"
+    $git config --global user.name "ZZZ"
+    ~~~
+- 他コマンド
+    - ステージングへ
+        ~~~
+        $git add XXX
+        $git add .
+        ~~~
+    - 取り消し
+        ~~~
+        $git restore XXX
+        ~~~
+    - ステージングの確認
+        ~~~
+        $git status
+        ~~~
+    - コミット
+        ~~~
+        $git commit -m "YYY"
+        ~~~
+    - コミットを確認
+        ~~~
+        $git log
+        ~~~
+    - リモート (mainブランチ) へ反映
+        ~~~
+        $git push origin main
+        ~~~
 
 ## ビルド関連
 - Vulkan
@@ -322,6 +363,10 @@
     ~~~
     $g++ main.cpp -lvulkan
     ~~~
+    - meson
+        ~~~
+        dependency('vulkan')
+        ~~~
 - Glfw
     ~~~
     #include <GLFW/glfw3.h>
@@ -329,6 +374,10 @@
     ~~~
     $g++ main.cpp -lglfw
     ~~~
+    - meson
+        ~~~
+        dependency('glfw3')
+        ~~~
 - OpenCV
     ~~~
     #include <opencv2/opencv.hpp>
@@ -336,6 +385,10 @@
     ~~~
     $g++ main.cpp -lopencv_core -I/usr/include/opencv4
     ~~~
+    - meson
+        ~~~
+        dependency('opencv4')
+        ~~~
 - HailoRT
     ~~~
     #include <hailo/hailort.h>
@@ -343,3 +396,8 @@
     ~~~
     $g++ main.cpp -lhailort
     ~~~
+    - meson
+        ~~~
+        Compiler = meson.get_compiler('cpp')
+        Compiler.find_library('hailort', dirs : '/usr/lib'),
+        ~~~
