@@ -7,10 +7,8 @@ Inc = [
 # 追加のライブラリ
 Compiler = meson.get_compiler('cpp')
 Lib = [
-	Compiler.find_library('hailort', dirs : '/usr/lib')
-	#dependency('opencv'),
-	#dependency('glfw3'),
-	#dependency('vulkan'),
+	Compiler.find_library('hailort', dirs : '/usr/lib'),
+	dependency('opencv4')
 ]
 
 executable('HailoRT', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
