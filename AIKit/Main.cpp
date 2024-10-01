@@ -1,6 +1,7 @@
 #include <cassert>
 #include <iostream>
 #include <thread>
+#include <mutex>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
@@ -12,80 +13,89 @@
 void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<hailort::OutputVStream> &Out) {
 	auto IsRunning = true;
 
+	//!< 入力 (AI への書き込み)
+	std::mutex InMutex;
+	const auto& InShape = In.front().get_info().shape;
+	cv::Mat Color;
 	auto InThread = std::thread([&]() {
 		cv::VideoCapture Capture("instance_segmentation.mp4");
-		cv::Mat Frame;
-
-		//!< 入力の情報
-		const auto& Shape = In.front().get_info().shape;
 		constexpr auto Bpp = 1;
 
 		//!< スレッド自身に終了判断させる
 		while (IsRunning) {
 			//!< キャプチャからフレームを取得
-			Capture >> Frame;
-			if(Frame.empty()) {
-				break;
-			}
-
-  			if(3 == Frame.channels()) {
-            	cv::cvtColor(Frame, Frame, cv::COLOR_BGR2RGB);
-			}
-        	if(static_cast<uint32_t>(Frame.cols) != Shape.width || static_cast<uint32_t>(Frame.rows) != Shape.height) {
+			InMutex.lock();
+			{
+				Capture >> Color;
 				//!< 必要に応じてリサイズ
-            	cv::resize(Frame, Frame, cv::Size(Shape.width, Shape.height), cv::INTER_AREA);
+				if(static_cast<uint32_t>(Color.cols) != InShape.width || static_cast<uint32_t>(Color.rows) != InShape.height) {
+            		cv::resize(Color, Color, cv::Size(InShape.width, InShape.height), cv::INTER_AREA);
+				}
+  				// if(3 == Color.channels()) {
+            	// 	cv::cvtColor(Color, Color, cv::COLOR_BGR2RGB);
+				// }
 			}
-
-			//cv::imshow("In", Frame);
-			//cv::pollKey ();
+			InMutex.unlock();
 
 			//!< AI の入力へ書き込み
-			const auto Result = In[0].write(hailort::MemoryView(Frame.data, Shape.width * Shape.height * Shape.features * Bpp));
-			if(HAILO_SUCCESS != Result) {
-				std::cout << "write failed" << std::endl;
-			}
+			In[0].write(hailort::MemoryView(Color.data, InShape.width * InShape.height * InShape.features * Bpp));
 		}		
 	});
 
+	//!< 出力 (AI からの読み込み)
+	std::mutex OutMutex;
+	const auto& OutShape = Out.front().get_info().shape;
+	auto Depth = cv::Mat(OutShape.height, OutShape.width, CV_32F, cv::Scalar(0));
 	auto OutThread = std::thread([&]() {
 		std::vector<uint8_t> Data(Out[0].get_frame_size());
-
-		const auto& Shape = Out.front().get_info().shape;
 
 		//!< スレッド自身に終了判断させる
 		while (IsRunning) {
 			//!< AI からの出力を取得
-			const auto Result = Out[0].read(hailort::MemoryView(std::data(Data), std::size(Data)));
-			if(HAILO_SUCCESS != Result) {
-				std::cout << "read failed" << std::endl;
-			}
+			Out[0].read(hailort::MemoryView(std::data(Data), std::size(Data)));
 
 			//!< AI からの出力を CV 形式へ
-			const auto InMat = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(Data));
-			//!< CV 形式の出力先
-			auto OutMat = cv::Mat(Shape.height, Shape.width, CV_32F, cv::Scalar(0));
-
+			const auto InMat = cv::Mat(OutShape.height, OutShape.width, CV_32F, std::data(Data));
+				
+			OutMutex.lock();
 			//!< 深度マップの調整
 			{
 				//!< -InMat を指数として自然対数の底 e のべき乗が OutMat に返る
-				cv::exp(-InMat, OutMat);
-    			OutMat = 1 / (1 + OutMat);
-    			OutMat = 1 / (OutMat * 10 + 0.009);
+				cv::exp(-InMat, Depth);
+    			Depth = 1 / (1 + Depth);
+    			Depth = 1 / (Depth * 10 + 0.009);
     
 				double Mn, Mx;
-    			cv::minMaxIdx(OutMat, &Mn, &Mx);
-    			OutMat.convertTo(OutMat, CV_8U, 255 / (Mx - Mn), -Mn);
+    			cv::minMaxIdx(Depth, &Mn, &Mx);
+    			Depth.convertTo(Depth, CV_8U, 255 / (Mx - Mn), -Mn);
 
 				//!< 白黒を反転 (手前が白)
-				OutMat = 255 - OutMat;
-
-				cv::imshow("Out", OutMat);
-				cv::pollKey ();
+				Depth = 255 - Depth;
 			}
+			OutMutex.unlock();
 		}
 	});
 
+	constexpr auto ESC = 27;
 	while(IsRunning) {
+		//!< カラー画像を表示
+		InMutex.lock();
+		if(!Color.empty()) {
+			cv::imshow("Color", Color);
+		}
+		InMutex.unlock();
+
+		//!< 深度画像を表示
+		OutMutex.lock();
+		if(!Depth.empty()) {
+			cv::imshow("Depth", Depth);
+		}
+		OutMutex.unlock();
+
+		//!< ループ脱出
+		if(ESC == cv::pollKey()) {
+			IsRunning=false;
+		}
 	}
 
 	InThread.join();
