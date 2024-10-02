@@ -13,16 +13,30 @@
 void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<hailort::OutputVStream> &Out) {
 	auto IsRunning = true;
 
+	auto InFrame = 0;
+	auto OutFrame = 0;
+
 	//!< 入力 (AI への書き込み)
 	std::mutex InMutex;
 	const auto& InShape = In.front().get_info().shape;
 	cv::Mat Color;
 	auto InThread = std::thread([&]() {
 		cv::VideoCapture Capture("instance_segmentation.mp4");
+		//cv::VideoCapture Capture("Sample.mp4");
+		
+		//!< カメラが /dev/videoN の場合 Capture(N, cv::CAP_V4L2)
+		//cv::VideoCapture Capture(0, cv::CAP_V4L2);
+
 		constexpr auto Bpp = 1;
 
 		//!< スレッド自身に終了判断させる
 		while (IsRunning) {
+			//!< 入力と出力がズレていかないように同期する
+			if(InFrame > OutFrame) {
+				continue;
+			}
+			++InFrame;
+
 			//!< キャプチャからフレームを取得
 			InMutex.lock();
 			{
@@ -51,6 +65,8 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 
 		//!< スレッド自身に終了判断させる
 		while (IsRunning) {
+			++OutFrame;
+
 			//!< AI からの出力を取得
 			Out[0].read(hailort::MemoryView(std::data(Data), std::size(Data)));
 
@@ -79,22 +95,30 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 	constexpr auto ESC = 27;
 	while(IsRunning) {
 		//!< カラー画像を表示
-		InMutex.lock();
 		if(!Color.empty()) {
-			cv::imshow("Color", Color);
+			InMutex.lock();
+			{
+				cv::Mat Disp;
+				cv::resize(Color, Disp, cv::Size(Color.cols, Color.rows) * 3/2, cv::INTER_AREA);
+				cv::imshow("Color", Disp);
+			}
+			InMutex.unlock();
 		}
-		InMutex.unlock();
 
 		//!< 深度画像を表示
-		OutMutex.lock();
 		if(!Depth.empty()) {
-			cv::imshow("Depth", Depth);
+			OutMutex.lock();
+			{
+				cv::Mat Disp;
+				cv::resize(Depth, Disp, cv::Size(Depth.cols, Depth.rows) * 3/2, cv::INTER_AREA);
+				cv::imshow("Depth", Disp);
+			}
+			OutMutex.unlock();
 		}
-		OutMutex.unlock();
 
 		//!< ループ脱出
 		if(ESC == cv::pollKey()) {
-			IsRunning=false;
+			IsRunning = false;
 		}
 	}
 
@@ -104,17 +128,24 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 
 int main() {
 #if 0
-	cv::VideoCapture Cap("instance_segmentation.mp4");
+	//cv::VideoCapture Cap("instance_segmentation.mp4");
+	cv::VideoCapture Cap(0, cv::CAP_V4L2);
+	//cv::VideoCapture Cap(0, cv::CAP_ANY);
 	cv::Mat Frame;
 
+	constexpr auto ESC = 27;
 	while(true){
 		Cap >> Frame;
-		cv::imshow("Win", Frame);
-		cv::pollKey ();
-	}
+		//Cap.read(Frame);
 
-	//auto Output = cv::Mat::zeros( 120, 350, CV_8UC3 );
-    cv::waitKey(0);
+		if(!Frame.empty()){
+			cv::imshow("Video", Frame);
+		}
+		
+		if(ESC == cv::pollKey()) {
+			break;
+		}
+	}
 #else
 	//!< デバイス
 	auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
