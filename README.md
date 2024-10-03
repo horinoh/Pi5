@@ -354,6 +354,37 @@
         ~~~
         $git push origin main
         ~~~
+### gstreamer
+- *src 入力
+    - videotestsrc  
+        - テスト用入力 (カラーバー)
+    - appsrc        
+        - cv::VideoWriter()等、アプリケーションからの出力を入力とする
+    - libcamerasrc  
+        - カメラ入力
+- *sink 出力
+    - autovideosink 
+        - 自動出力 (画面ウインドウ等)
+    - appsink       
+        - cv::VideoCapture()等、アプリケーションへの入力を出力する
+    - filesink      
+        - ファイル出力
+#### 例
+- カラーバーを画面表示
+    ~~~
+    $gst-launch-1.0 videotestsrc ! autovideosink
+    ~~~
+- カメラ画像表示
+    ~~~
+    $gst-launch-1.0 libcamerasrc ! autovideosink
+    $gst-launch-1.0 libcamerasrc ! video/x-raw, width=640, height=320, framerate=30/1 ! autovideosink
+    ~~~
+- カメラ画像を OpenCV で処理する
+    - 基本的に gstreamer コマンドの、ケツを "appsink" に変えたものを VideoCapture() へ引数として渡せばよい
+    - OpenCV ではフォーマット "format=BGR" を指定する必要がある
+    ~~~
+    cv::VideoCapture Cap("libcamerasrc ! video/x-raw, format=BGR ! appsink");
+    ~~~
 
 ## ビルド関連
 - Vulkan

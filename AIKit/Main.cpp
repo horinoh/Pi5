@@ -1,5 +1,10 @@
 #include <cassert>
 #include <iostream>
+#if false
+#include <format>
+#else
+#include <sstream>
+#endif
 #include <thread>
 #include <mutex>
 
@@ -19,13 +24,20 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 	//!< 入力 (AI への書き込み)
 	std::mutex InMutex;
 	const auto& InShape = In.front().get_info().shape;
+	std::cout << InShape.width << " x " << InShape.height << std::endl;
 	cv::Mat Color;
 	auto InThread = std::thread([&]() {
-		cv::VideoCapture Capture("instance_segmentation.mp4");
+		//cv::VideoCapture Capture("instance_segmentation.mp4");
 		//cv::VideoCapture Capture("Sample.mp4");
-		
-		//!< カメラが /dev/videoN の場合 Capture(N, cv::CAP_V4L2)
-		//cv::VideoCapture Capture(0, cv::CAP_V4L2);
+
+		//!< OpenCV ではフォーマット "format=BGR" を指定する必要がある		
+	#if false
+		cv::VideoCapture Capture(std::data(std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", InShape.width, InShape.height, 30)));
+	#else
+		std::stringstream SS;
+		SS << "libcamerasrc ! video/x-raw, width=" << InShape.width  << ", height=" << InShape.height << ", framerate=" << 30 << "/1, format=BGR, ! appsink";	
+		cv::VideoCapture Capture(std::data(SS.str()));
+	#endif
 
 		constexpr auto Bpp = 1;
 
@@ -38,7 +50,7 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 			++InFrame;
 
 			//!< キャプチャからフレームを取得
-			InMutex.lock();
+			//InMutex.lock();
 			{
 				Capture >> Color;
 				//!< 必要に応じてリサイズ
@@ -49,7 +61,7 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
             	// 	cv::cvtColor(Color, Color, cv::COLOR_BGR2RGB);
 				// }
 			}
-			InMutex.unlock();
+			//InMutex.unlock();
 
 			//!< AI の入力へ書き込み
 			In[0].write(hailort::MemoryView(Color.data, InShape.width * InShape.height * InShape.features * Bpp));
@@ -96,13 +108,13 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 	while(IsRunning) {
 		//!< カラー画像を表示
 		if(!Color.empty()) {
-			InMutex.lock();
+			//InMutex.lock();
 			{
 				cv::Mat Disp;
 				cv::resize(Color, Disp, cv::Size(Color.cols, Color.rows) * 3/2, cv::INTER_AREA);
 				cv::imshow("Color", Disp);
 			}
-			InMutex.unlock();
+			//InMutex.unlock();
 		}
 
 		//!< 深度画像を表示
@@ -128,15 +140,23 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 
 int main() {
 #if 0
-	//cv::VideoCapture Cap("instance_segmentation.mp4");
-	cv::VideoCapture Cap(0, cv::CAP_V4L2);
-	//cv::VideoCapture Cap(0, cv::CAP_ANY);
+	cv::VideoCapture Capture("libcamerasrc ! video/x-raw, width=320, height=256, framerate=30/1, format=BGR ! appsink");
+	//cv::VideoCapture Capture("instance_segmentation.mp4");
+ 
+	if(!Capture.isOpened()){
+		std::cerr << "Capture open failed" << std::endl;
+	}
+	std::cout <<"Backend = "<< Capture.getBackendName() << std::endl;
+
 	cv::Mat Frame;
 
 	constexpr auto ESC = 27;
 	while(true){
-		Cap >> Frame;
-		//Cap.read(Frame);
+		Capture >> Frame;
+		
+		// if(Frame.rows + Frame.cols) {
+		// 	std::cout << Frame.cols << " x " << Frame.rows << std::endl;
+		// }
 
 		if(!Frame.empty()){
 			cv::imshow("Video", Frame);
