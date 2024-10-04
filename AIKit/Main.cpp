@@ -21,16 +21,19 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 	auto InFrame = 0;
 	auto OutFrame = 0;
 
-	//!< 入力 (AI への書き込み)
+	//!< AI への入力
 	std::mutex InMutex;
 	const auto& InShape = In.front().get_info().shape;
 	std::cout << InShape.width << " x " << InShape.height << std::endl;
-	cv::Mat Color;
+	cv::Mat OrigColor, Color;
 	auto InThread = std::thread([&]() {
-		//cv::VideoCapture Capture("instance_segmentation.mp4");
+#if 0
+		//!< 動画を入力
+		cv::VideoCapture Capture("instance_segmentation.mp4");
 		//cv::VideoCapture Capture("Sample.mp4");
-
-		//!< OpenCV ではフォーマット "format=BGR" を指定する必要がある		
+#else
+		//!< カメラ画像を入力
+		//!< (Gstream の引数に、OpenCV では "format=BGR" を指定する必要がある)	
 	#if false
 		cv::VideoCapture Capture(std::data(std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", InShape.width, InShape.height, 30)));
 	#else
@@ -38,7 +41,7 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 		SS << "libcamerasrc ! video/x-raw, width=" << InShape.width  << ", height=" << InShape.height << ", framerate=" << 30 << "/1, format=BGR, ! appsink";	
 		cv::VideoCapture Capture(std::data(SS.str()));
 	#endif
-
+#endif
 		constexpr auto Bpp = 1;
 
 		//!< スレッド自身に終了判断させる
@@ -49,26 +52,29 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 			}
 			++InFrame;
 
-			//!< キャプチャからフレームを取得
+			//!< フレームを取得
 			//InMutex.lock();
 			{
-				Capture >> Color;
-				//!< 必要に応じてリサイズ
-				if(static_cast<uint32_t>(Color.cols) != InShape.width || static_cast<uint32_t>(Color.rows) != InShape.height) {
-            		cv::resize(Color, Color, cv::Size(InShape.width, InShape.height), cv::INTER_AREA);
-				}
-  				// if(3 == Color.channels()) {
-            	// 	cv::cvtColor(Color, Color, cv::COLOR_BGR2RGB);
-				// }
+				Capture >> OrigColor;
 			}
 			//InMutex.unlock();
 
-			//!< AI の入力へ書き込み
+			//!< 必要に応じてリサイズ
+			if(static_cast<uint32_t>(OrigColor.cols) != InShape.width || static_cast<uint32_t>(OrigColor.rows) != InShape.height) {
+            	cv::resize(OrigColor, Color, cv::Size(InShape.width, InShape.height), cv::INTER_AREA);
+			} else {
+				Color = OrigColor.clone();
+			}
+  			// if(3 == Color.channels()) {
+            // 	cv::cvtColor(Color, Color, cv::COLOR_BGR2RGB);
+			// }
+
+			//!< AI への入力 (書き込み)
 			In[0].write(hailort::MemoryView(Color.data, InShape.width * InShape.height * InShape.features * Bpp));
 		}		
 	});
 
-	//!< 出力 (AI からの読み込み)
+	//!< AI からの出力
 	std::mutex OutMutex;
 	const auto& OutShape = Out.front().get_info().shape;
 	auto Depth = cv::Mat(OutShape.height, OutShape.width, CV_32F, cv::Scalar(0));
@@ -79,10 +85,10 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 		while (IsRunning) {
 			++OutFrame;
 
-			//!< AI からの出力を取得
+			//!< 出力を取得
 			Out[0].read(hailort::MemoryView(std::data(Data), std::size(Data)));
 
-			//!< AI からの出力を CV 形式へ
+			//!< OpenCV 形式へ
 			const auto InMat = cv::Mat(OutShape.height, OutShape.width, CV_32F, std::data(Data));
 				
 			OutMutex.lock();
@@ -95,40 +101,57 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
     
 				double Mn, Mx;
     			cv::minMaxIdx(Depth, &Mn, &Mx);
-    			Depth.convertTo(Depth, CV_8U, 255 / (Mx - Mn), -Mn);
-
-				//!< 白黒を反転 (手前が白)
-				Depth = 255 - Depth;
+				//!< 手前が黒、奥が白
+    			//Depth.convertTo(Depth, CV_8U, 255 / (Mx - Mn), -Mn);
+				//!< 手前が白、奥が黒
+    			Depth.convertTo(Depth, CV_8U, -255 / (Mx - Mn), -Mn + 255);
 			}
 			OutMutex.unlock();
 		}
 	});
 
 	constexpr auto ESC = 27;
+	//!< 表示用
+	cv::Mat L, R, LR;
+	const auto LSize = cv::Size(320, 240);
+
+	//!< ビデオ書き出し
+	const auto Fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
+	cv::VideoWriter WriterL("RGB.mp4", Fourcc, 30, LSize);
+	cv::VideoWriter WriterR("D.mp4", Fourcc, 30, LSize, true);
+
+	//!< メインループ
 	while(IsRunning) {
-		//!< カラー画像を表示
-		if(!Color.empty()) {
+		if(!OrigColor.empty() && !Depth.empty()) {
+			//!< 左 : カラーマップ
 			//InMutex.lock();
 			{
-				cv::Mat Disp;
-				cv::resize(Color, Disp, cv::Size(Color.cols, Color.rows) * 3/2, cv::INTER_AREA);
-				cv::imshow("Color", Disp);
+				cv::resize(OrigColor, L, LSize, cv::INTER_AREA);
 			}
 			//InMutex.unlock();
-		}
 
-		//!< 深度画像を表示
-		if(!Depth.empty()) {
+			//!< 右 : 深度マップ
 			OutMutex.lock();
 			{
-				cv::Mat Disp;
-				cv::resize(Depth, Disp, cv::Size(Depth.cols, Depth.rows) * 3/2, cv::INTER_AREA);
-				cv::imshow("Depth", Disp);
+				cv::resize(Depth, R, LSize, cv::INTER_AREA);
 			}
 			OutMutex.unlock();
-		}
 
-		//!< ループ脱出
+			//!< 連結する為に左右のタイプを 8UC3 で合わせる必要がある
+			cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
+			R.convertTo(R, CV_8UC3);
+			//!< (水平)連結
+			cv::hconcat(L, R, LR);
+
+			//!< 表示
+			cv::imshow("Color Depth", LR);
+
+			//!< 書き出し
+			WriterL << L;
+			WriterR << R;
+		}
+		
+		//!< ループを抜けます
 		if(ESC == cv::pollKey()) {
 			IsRunning = false;
 		}
@@ -139,34 +162,6 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 }
 
 int main() {
-#if 0
-	cv::VideoCapture Capture("libcamerasrc ! video/x-raw, width=320, height=256, framerate=30/1, format=BGR ! appsink");
-	//cv::VideoCapture Capture("instance_segmentation.mp4");
- 
-	if(!Capture.isOpened()){
-		std::cerr << "Capture open failed" << std::endl;
-	}
-	std::cout <<"Backend = "<< Capture.getBackendName() << std::endl;
-
-	cv::Mat Frame;
-
-	constexpr auto ESC = 27;
-	while(true){
-		Capture >> Frame;
-		
-		// if(Frame.rows + Frame.cols) {
-		// 	std::cout << Frame.cols << " x " << Frame.rows << std::endl;
-		// }
-
-		if(!Frame.empty()){
-			cv::imshow("Video", Frame);
-		}
-		
-		if(ESC == cv::pollKey()) {
-			break;
-		}
-	}
-#else
 	//!< デバイス
 	auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
 	std::cout << "Device status = " << Device.status() << std::endl;
@@ -189,7 +184,6 @@ int main() {
 
 	//!< 推論の起動
 	Infer(*InputVstreams, *OutputVstreams);
-#endif
 
 	return 0;
 }
