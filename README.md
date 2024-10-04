@@ -380,7 +380,7 @@
     $gst-launch-1.0 libcamerasrc ! video/x-raw, width=640, height=320, framerate=30/1 ! autovideosink
     ~~~
 - カメラ画像を OpenCV で処理する
-    - 基本的に gstreamer コマンドの、ケツを "appsink" に変えたものを VideoCapture() へ引数として渡せばよい
+    - 基本的に gstreamer コマンド引数の、ケツを "appsink" に変えたものを VideoCapture() へ引数として渡せばよい
     - OpenCV ではフォーマット "format=BGR" を指定する必要がある
     ~~~
     cv::VideoCapture Cap("libcamerasrc ! video/x-raw, format=BGR ! appsink");
