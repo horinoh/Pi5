@@ -18,7 +18,7 @@
 
 //#define OUTPUT_VIDEO
 
-void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<hailort::OutputVStream> &Out, const char* InFile) {
+void Inference(std::vector<hailort::InputVStream> &In, std::vector<hailort::OutputVStream> &Out, const char* InVideo) {
 	auto IsRunning = true;
 
 	//!< 同期用
@@ -44,7 +44,7 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 #endif
 
 		//!< キャプチャ : 入力ファイルの指定が無い場合はカメラ
-		cv::VideoCapture Capture(nullptr != InFile ? InFile : std::data(LibCam));
+		cv::VideoCapture Capture(nullptr != InVideo ? InVideo : std::data(LibCam));
 
 		constexpr auto Bpp = 1;
 
@@ -165,6 +165,49 @@ void Infer(std::vector<hailort::InputVStream> &In, [[maybe_unused]]std::vector<h
 	OutThread.join();
 }
 
+#if false
+class Hailo 
+{
+public:
+	Hailo(std::string_view HefFile) {
+		//!< デバイス
+		const auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
+
+		//!< ネットワーク
+		auto Hef = hailort::Hef::create(std::data(HefFile)); 
+		const auto ConfiguareParam = Hef->create_configure_params(HAILO_STREAM_INTERFACE_PCIE).value();
+		ConfiguredNetworkGroup = Device.value()->configure(Hef.value(), ConfiguareParam)->at(0);
+
+		const auto InputParam = ConfiguredNetworkGroup->make_input_vstream_params(true, HAILO_FORMAT_TYPE_UINT8, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value();
+		auto InputVstreams = hailort::VStreamsBuilder::create_input_vstreams(*ConfiguredNetworkGroup, InputParam);
+
+		const auto OutputParam = ConfiguredNetworkGroup->make_output_vstream_params(false, HAILO_FORMAT_TYPE_FLOAT32, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value();
+		auto OutputVstreams = hailort::VStreamsBuilder::create_output_vstreams(*ConfiguredNetworkGroup, OutputParam);
+
+		InputVstreams1 = &InputVstreams.value();
+		OutputVstreams1 = &OutputVstreams.value();	
+	}
+
+	virtual void Start() {
+		//!< AI ネットワークのアクティベート
+		const auto ActivatedNetworkGroup = ConfiguredNetworkGroup->activate();
+
+		Inference(*InputVstreams1, *OutputVstreams1, nullptr);
+	}
+
+	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] const char* InVideo) {		
+	}
+
+protected:
+	std::shared_ptr<hailort::ConfiguredNetworkGroup> ConfiguredNetworkGroup;
+
+	std::vector<hailort::InputVStream>* InputVstreams1;
+	std::vector<hailort::OutputVStream>* OutputVstreams1;
+
+	std::vector<std::thread> Threads;
+};
+#endif
+
 int main(int argc, char* argv[]) {
 	//!< 引数
 	const auto Args = std::span<char*>(argv, argc);
@@ -173,25 +216,28 @@ int main(int argc, char* argv[]) {
 	}
 
 	//!< デバイス
-	auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
+	const auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
 
 	//!< ネットワーク
-	auto Hef = hailort::Hef::create("scdepthv3.hef"); //!< 引数にする?
-	const auto NetworkGroups = Device.value()->configure(Hef.value(), Hef->create_configure_params(HAILO_STREAM_INTERFACE_PCIE).value());
-	const auto NetworkGroup = NetworkGroups->at(0);
+	std::string_view HefFile("scdepthv3.hef");
+	auto Hef = hailort::Hef::create(std::data(HefFile)); 
+	const auto ConfigureParam = Hef->create_configure_params(HAILO_STREAM_INTERFACE_PCIE).value();
+	const auto ConfiguredNetworkGroup = Device.value()->configure(Hef.value(), ConfigureParam)->at(0);
 
 	//!< AI 入出力 (入力へ書き込むと AI に処理されて出力に返る)
-	auto InputVstreams = hailort::VStreamsBuilder::create_input_vstreams(*NetworkGroup, NetworkGroup->make_input_vstream_params(true, HAILO_FORMAT_TYPE_UINT8, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value());
-	auto OutputVstreams = hailort::VStreamsBuilder::create_output_vstreams(*NetworkGroup, NetworkGroup->make_output_vstream_params(false, HAILO_FORMAT_TYPE_FLOAT32, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value());
+	const auto InputParam = ConfiguredNetworkGroup->make_input_vstream_params(true, HAILO_FORMAT_TYPE_UINT8, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value();
+	auto InputVstreams = hailort::VStreamsBuilder::create_input_vstreams(*ConfiguredNetworkGroup, InputParam);
+	const auto OutputParam = ConfiguredNetworkGroup->make_output_vstream_params(false, HAILO_FORMAT_TYPE_FLOAT32, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value();
+	auto OutputVstreams = hailort::VStreamsBuilder::create_output_vstreams(*ConfiguredNetworkGroup, OutputParam);
 
 	//!< AI ネットワークのアクティベート
-	auto Activated = NetworkGroup->activate();
+	const auto ActivatedNetworkGroup = ConfiguredNetworkGroup->activate();
 
-	//!< 入力ファイルパス(引数から取得)、指定が無い場合はカメラ画像を使用
-	const auto InFile = std::size(Args) > 1 ? Args[1] : nullptr;
+	//!< 入力ファイルパス(引数から取得)、引数指定が無い場合はカメラ画像を使用
+	const auto InVideo = std::size(Args) > 1 ? Args[1] : nullptr;
 	//!< 推論の起動
-	Infer(*InputVstreams, *OutputVstreams, InFile);
+	Inference(InputVstreams.value(), OutputVstreams.value(), InVideo);
 
-	return 0;
+	exit(EXIT_SUCCESS);
 }
 	

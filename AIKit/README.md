@@ -88,6 +88,12 @@
 - [参考 (入出力部分)](https://github.com/hailo-ai/hailort/tree/master/hailort/libhailort/examples)
 - [参考 (組み込み)](https://github.com/hailo-ai/Hailo-Application-Code-Examples/tree/main/runtime/cpp)
 
+### Depth Estimation
+- scdepthv3.hef は [ここ](https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.11.0/hailo8l/scdepthv3.hef) からダウンロードする
+    ~~~
+    $wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.11.0/hailo8l/scdepthv3.hef
+    ~~~
+
 <!--
 ### HailoRT ビルド (Windowsの場合)
 - [HailoRT](https://github.com/hailo-ai/hailort.git) をクローン
