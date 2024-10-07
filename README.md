@@ -360,6 +360,8 @@
         - テスト用入力 (カラーバー)
     - appsrc        
         - cv::VideoWriter()等、アプリケーションからの出力を入力とする
+    - filesrc location=XXX
+        - ファイル入力
     - libcamerasrc  
         - カメラ入力
 - *sink 出力
@@ -367,7 +369,7 @@
         - 自動出力 (画面ウインドウ等)
     - appsink       
         - cv::VideoCapture()等、アプリケーションへの入力を出力する
-    - filesink      
+    - filesink location=XXX
         - ファイル出力
 #### 例
 - カラーバーを画面表示

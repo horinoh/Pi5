@@ -21,6 +21,7 @@
 class Hailo 
 {
 public:
+	//!< カメラ画像を取得するのに必要な、cv::VideoCapture() へ引数 (文字列) を作成します
 	static std::string GetLibCameGSTStr(const int Width, const int Height, const int FPS) {
 #if false
 		return std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", Width, Height, FPS);
@@ -31,7 +32,7 @@ public:
 #endif
 	}
 
-	virtual void Start(std::string_view HefFile, const char* InVideo) {
+	virtual void Start(std::string_view HefFile, const char* InVideo, std::function<bool()> Loop) {
 		//!< デバイス
 		const auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
 
@@ -51,12 +52,24 @@ public:
 		//!< AI ネットワークのアクティベート
 		const auto ActivatedNetworkGroup = ConfiguredNetworkGroup->activate();
 
+		//!< 推論開始
 		Inference(InputVstreams.value(), OutputVstreams.value(), InVideo);
+
+		//!< ループ
+		while(Loop()) { }
+
+		//!< 終了、スレッド同期
+		Join();
 	}
 
-	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] const char* InVideo) {		
+	//!< 継承クラスでオーバーライドします
+	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] const char* InVideo) {}
+	
+	//!< スレッド同期
+	void Join() {
+		for(auto& i : Threads) { i.join(); }
 	}
-
+	
 protected:
 	std::vector<std::thread> Threads;
 };
@@ -129,59 +142,9 @@ public:
 				} OutMutex.unlock();
 			}
 		});
-
-#if true
-		//!< メインループ
-		constexpr auto ESC = 27;
-		//!< 表示用
-		cv::Mat L, R, LR;
-		const auto LSize = cv::Size(320, 240); //!< 左のサイズ (右も同じ)
-#ifdef OUTPUT_VIDEO
-		//!< ビデオ書き出し
-		const auto Fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
-		cv::VideoWriter WriterL("RGB.mp4", Fourcc, Fps, LSize);
-		cv::VideoWriter WriterR("D.mp4", Fourcc, Fps, LSize, true);
-#endif
-		while(Running()) {
-			const auto& CM = GetColorMap();
-			const auto& DM = GetDepthMap();
-			if(CM.empty() || DM.empty()) { continue; }
-
-			//!< 左 : カラーマップ
-			cv::resize(CM, L, LSize, cv::INTER_AREA);
-
-			//!< 右 : 深度マップ
-			OutMutex.lock(); {
-				cv::resize(DM, R, LSize, cv::INTER_AREA);
-			} OutMutex.unlock();
-
-			//!< 連結する為に左右のタイプを 8UC3 に合わせる
-			cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
-			R.convertTo(R, CV_8UC3);
-			//!< (水平) 連結
-			cv::hconcat(L, R, LR);
-
-			//!< 表示
-			cv::imshow("Color Depth", LR);
-
-#ifdef OUTPUT_VIDEO
-			//!< 書き出し
-			WriterL << L;
-			WriterR << R;
-#endif	
-			//!< ループを抜けます
-			if(ESC == cv::pollKey()) {
-				Exit();
-			}
-		}
-
-		Join();
-#endif
 	}
 
-	void Join() {
-		for(auto& i : Threads) { i.join(); }
-	}
+	int GetFps() const { return Fps; }
 
 	bool Running() const { return IsRunning; }
 	void Exit(){ IsRunning = false; }
@@ -189,8 +152,10 @@ public:
 	const cv::Mat& GetColorMap() const { return ColorMap; }
 	const cv::Mat& GetDepthMap() const { return DepthMap; }
 
+	void LockDepthMap() { OutMutex.lock(); }
+	void UnlockDepthMap() { OutMutex.unlock(); }
+
 protected:
-public:
 	static const int Fps = 30;
 	bool IsRunning = true;
 	int InFrameCount = 0;
@@ -211,12 +176,54 @@ int main(int argc, char* argv[]) {
 	const auto InVideo = std::size(Args) > 1 ? Args[1] : nullptr;
 
 	//!< 深度推定クラス
-	DepthEstimation DE;
+	DepthEstimation DepEst;
 	
-	//!< 推定開始
-	DE.Start("scdepthv3.hef", InVideo);
+	//!< 表示用
+	cv::Mat L, R, LR;
+	const auto LSize = cv::Size(320, 240); //!< 左のサイズ (右も同じ)
+#ifdef OUTPUT_VIDEO
+	//!< ビデオ書き出し
+	const auto Fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
+	cv::VideoWriter WriterL("RGB.mp4", Fourcc, DepEst.GetFps(), LSize);
+	cv::VideoWriter WriterR("D.mp4", Fourcc, DepEst.GetFps(), LSize, true);
+#endif
 
-	//DE.Join();
+	//!< 推定開始、ループ
+	DepEst.Start("scdepthv3.hef", InVideo, 
+	[&]() {
+		//!< 深度推定クラスからカラーマップ、深度マップを取得
+		const auto& CM = DepEst.GetColorMap();
+		const auto& DM = DepEst.GetDepthMap();
+		if(CM.empty() || DM.empty()) { return DepEst.Running(); }
+
+		//!< 左 : カラーマップ
+		cv::resize(CM, L, LSize, cv::INTER_AREA);
+
+		//!< 右 : 深度マップ
+		DepEst.LockDepthMap(); {
+			cv::resize(DM, R, LSize, cv::INTER_AREA);
+		} DepEst.UnlockDepthMap();
+
+		//!< 連結する為に左右のタイプを 8UC3 に合わせる必要がある
+		cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
+		R.convertTo(R, CV_8UC3);
+		//!< 水平連結
+		cv::hconcat(L, R, LR);
+
+		//!< 表示
+		cv::imshow("Color & Depth Map", LR);
+
+#ifdef OUTPUT_VIDEO
+		//!< 書き出し
+		WriterL << L;
+		WriterR << R;
+#endif	
+		constexpr auto ESC = 27;
+		if(ESC == cv::pollKey()) {
+			DepEst.Exit();
+		}
+		return DepEst.Running();
+	});
 
 	exit(EXIT_SUCCESS);
 }
