@@ -16,12 +16,11 @@
 
 #include <hailo/hailort.hpp>
 
-//#define OUTPUT_VIDEO
-
 class Hailo 
 {
 public:
-	//!< カメラ画像を取得するのに必要な、cv::VideoCapture() へ引数 (文字列) を作成します
+	//!< カメラ画像を取得するのに必要な、cv::VideoCapture() へ引数 (文字列) を作成
+	//!< (OpenCV では "format=BGR" を追加指定する必要がある)
 	static std::string GetLibCameGSTStr(const int Width, const int Height, const int FPS) {
 #if false
 		return std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", Width, Height, FPS);
@@ -33,6 +32,8 @@ public:
 	}
 
 	virtual void Start(std::string_view HefFile, const char* InVideo, std::function<bool()> Loop) {
+		IsRunning = true;
+
 		//!< デバイス
 		const auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
 
@@ -56,23 +57,28 @@ public:
 		Inference(InputVstreams.value(), OutputVstreams.value(), InVideo);
 
 		//!< ループ
-		while(Loop()) { }
+		while((IsRunning = Loop())) { 
+		}
 
 		//!< 終了、スレッド同期
 		Join();
 	}
 
-	//!< 継承クラスでオーバーライドします
+	//!< 継承クラスでオーバーライド
 	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] const char* InVideo) {}
 	
 	//!< スレッド同期
 	void Join() {
-		for(auto& i : Threads) { i.join(); }
+		for(auto& i : Threads) { 
+			i.join();
+		}
 	}
 	
 protected:
+	bool IsRunning = false;
 	std::vector<std::thread> Threads;
 };
+
 class DepthEstimation : public Hailo
 {
 private:
@@ -83,8 +89,8 @@ public:
 		//!< AI 入力スレッド
 		Threads.emplace_back([&]() {
 			const auto& InShape = In.front().get_info().shape;
-			//!< カメラ : VideoCapture() へ Gstreamer 引数を渡す形で作成すれば良い (OpenCV では "format=BGR" を追加指定する必要があるので注意)
-			const auto LibCam = Super::GetLibCameGSTStr(InShape.width, InShape.height, Fps);
+			//!< カメラ : VideoCapture() へ Gstreamer 引数を渡す形で作成すれば良い
+			const auto LibCam = Super::GetLibCameGSTStr(InShape.width, InShape.height, GetFps());
 			//!< キャプチャ : 入力ファイルの指定が無い場合はカメラ
 			cv::VideoCapture Capture(nullptr != InVideo ? InVideo : std::data(LibCam));
 
@@ -144,27 +150,24 @@ public:
 		});
 	}
 
-	int GetFps() const { return Fps; }
+	virtual int GetFps() const { return 30; }
 
-	bool Running() const { return IsRunning; }
-	void Exit(){ IsRunning = false; }
+	std::mutex& GetMutex() { return OutMutex; }
 
 	const cv::Mat& GetColorMap() const { return ColorMap; }
 	const cv::Mat& GetDepthMap() const { return DepthMap; }
 
-	void LockDepthMap() { OutMutex.lock(); }
-	void UnlockDepthMap() { OutMutex.unlock(); }
-
 protected:
-	static const int Fps = 30;
-	bool IsRunning = true;
 	int InFrameCount = 0;
 	int OutFrameCount = 0;
 
 	std::mutex OutMutex;
+	
 	cv::Mat ColorMap;
 	cv::Mat DepthMap;
 };
+
+//#define OUTPUT_VIDEO
 
 int main(int argc, char* argv[]) {
 	//!< 引数
@@ -180,7 +183,7 @@ int main(int argc, char* argv[]) {
 	
 	//!< 表示用
 	cv::Mat L, R, LR;
-	const auto LSize = cv::Size(320, 240); //!< 左のサイズ (右も同じ)
+	const auto LSize = cv::Size(320, 240); //!< 左 (右も同じ) のサイズ 
 #ifdef OUTPUT_VIDEO
 	//!< ビデオ書き出し
 	const auto Fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
@@ -194,15 +197,21 @@ int main(int argc, char* argv[]) {
 		//!< 深度推定クラスからカラーマップ、深度マップを取得
 		const auto& CM = DepEst.GetColorMap();
 		const auto& DM = DepEst.GetDepthMap();
-		if(CM.empty() || DM.empty()) { return DepEst.Running(); }
+		if(CM.empty() || DM.empty()) { return true; }
 
 		//!< 左 : カラーマップ
 		cv::resize(CM, L, LSize, cv::INTER_AREA);
 
-		//!< 右 : 深度マップ
-		DepEst.LockDepthMap(); {
+		//!< 右 : 深度マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
+		DepEst.GetMutex().lock(); {
 			cv::resize(DM, R, LSize, cv::INTER_AREA);
-		} DepEst.UnlockDepthMap();
+		} DepEst.GetMutex().unlock();
+
+#ifdef OUTPUT_VIDEO
+		//!< 書き出し
+		WriterL << L;
+		WriterR << R;
+#endif	
 
 		//!< 連結する為に左右のタイプを 8UC3 に合わせる必要がある
 		cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
@@ -213,16 +222,11 @@ int main(int argc, char* argv[]) {
 		//!< 表示
 		cv::imshow("Color & Depth Map", LR);
 
-#ifdef OUTPUT_VIDEO
-		//!< 書き出し
-		WriterL << L;
-		WriterR << R;
-#endif	
 		constexpr auto ESC = 27;
 		if(ESC == cv::pollKey()) {
-			DepEst.Exit();
+			return false;
 		}
-		return DepEst.Running();
+		return true;
 	});
 
 	exit(EXIT_SUCCESS);
