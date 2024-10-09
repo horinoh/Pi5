@@ -20,7 +20,7 @@ class Hailo
 {
 public:
 	//!< カメラ画像を取得するのに必要な、cv::VideoCapture() へ引数 (文字列) を作成
-	//!< (OpenCV では "format=BGR" を追加指定する必要がある)
+	//!< (OpenCV では BGR なので "format=BGR" を指定する必要がある)
 	static std::string GetLibCameGSTStr(const int Width, const int Height, const int FPS) {
 #if false
 		return std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", Width, Height, FPS);
@@ -31,7 +31,7 @@ public:
 #endif
 	}
 
-	virtual void Start(std::string_view HefFile, const char* InVideo, std::function<bool()> Loop) {
+	virtual void Start(std::string_view HefFile, std::string_view CapturePath, std::function<bool()> Loop) {
 		IsRunning = true;
 
 		//!< デバイス
@@ -54,7 +54,7 @@ public:
 		const auto ActivatedNetworkGroup = ConfiguredNetworkGroup->activate();
 
 		//!< 推論開始
-		Inference(InputVstreams.value(), OutputVstreams.value(), InVideo);
+		Inference(InputVstreams.value(), OutputVstreams.value(), CapturePath);
 
 		//!< ループ
 		while((IsRunning = Loop())) { 
@@ -65,7 +65,8 @@ public:
 	}
 
 	//!< 継承クラスでオーバーライド
-	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] const char* InVideo) {}
+	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] std::string_view CapturePath) {
+	}
 	
 	//!< スレッド同期
 	void Join() {
@@ -85,15 +86,13 @@ private:
 	using Super = Hailo;
 
 public:
-	virtual void Inference(std::vector<hailort::InputVStream> &In, std::vector<hailort::OutputVStream> &Out, const char* InVideo) override {
+	virtual void Inference(std::vector<hailort::InputVStream> &In, std::vector<hailort::OutputVStream> &Out, std::string_view CapturePath) override {
 		//!< AI 入力スレッド
 		Threads.emplace_back([&]() {
-			const auto& InShape = In.front().get_info().shape;
-			//!< カメラ : VideoCapture() へ Gstreamer 引数を渡す形で作成すれば良い
-			const auto LibCam = Super::GetLibCameGSTStr(InShape.width, InShape.height, GetFps());
-			//!< キャプチャ : 入力ファイルの指定が無い場合はカメラ
-			cv::VideoCapture Capture(nullptr != InVideo ? InVideo : std::data(LibCam));
+			cv::VideoCapture Capture(std::data(CapturePath));
+			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
 
+			const auto& InShape = In.front().get_info().shape;
 			cv::Mat InAI;
 			//!< スレッド自身に終了判断させる
 			while (IsRunning) {
@@ -120,7 +119,6 @@ public:
 		//!< AI 出力スレッド
 		Threads.emplace_back([&](){
 			const auto& OutShape = Out.front().get_info().shape;
-	
 			std::vector<uint8_t> OutAI(Out[0].get_frame_size());
 			//!< スレッド自身に終了判断させる
 			while (IsRunning) {
@@ -170,13 +168,15 @@ protected:
 //#define OUTPUT_VIDEO
 
 int main(int argc, char* argv[]) {
-	//!< 引数
 	const auto Args = std::span<char*>(argv, argc);
-	for(int Index = 0; auto i : Args){
-		std::cout << "Args[" << Index++ << "] " << i << std::endl;
-	}
-	//!< 入力ファイルパス(引数から取得)、引数指定が無い場合はカメラ画像を使用
-	const auto InVideo = std::size(Args) > 1 ? Args[1] : nullptr;
+	//!< 引数列挙
+	//for(int Index = 0; auto i : Args){ std::cout << "Args[" << Index++ << "] " << i << std::endl; }
+
+	//!< 入力キャプチャファイルを引数から取得、明示的に指定が無い場合はカメラ画像を使用
+	//!< (カメラ画像は VideoCapture() へ Gstreamer の引数を渡す形で作成)
+	const auto Cam = Hailo::GetLibCameGSTStr(1280, 960, 30);
+	auto CapturePath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
+	std::cout << "Capturing : \"" << CapturePath << "\"" << std::endl;
 
 	//!< 深度推定クラス
 	DepthEstimation DepEst;
@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 	//!< 推定開始、ループ
-	DepEst.Start("scdepthv3.hef", InVideo, 
+	DepEst.Start("scdepthv3.hef", CapturePath, 
 	[&]() {
 		//!< 深度推定クラスからカラーマップ、深度マップを取得
 		const auto& CM = DepEst.GetColorMap();
