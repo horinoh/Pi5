@@ -73,6 +73,21 @@
         Username    <USER>
         Password    <PASS>
         ~~~
+
+### X11 (Wayland をやめる)
+- 一旦 VNC をオフにする (VNC のオンオフは上記)、下記で X11 を有効にした VNC 後戻す (必要に応じて)
+- Wayland をオフにする
+    ~~~
+    $sudo raspi-config
+    ~~~
+    - Advanced Options - Wayland - X11 
+- 確認
+    ~~~
+    echo $XDG_SESSION_TYPE
+    ~~~
+- Wayland バージョンをインストールしていたものがあれば、アンインストールして、X11 バージョンにする
+    - glfw3-wayland を glfw3 にするとか
+
 ## 更新
 - 更新
     ~~~
@@ -416,8 +431,9 @@
     #include <opencv2/opencv.hpp>
     ~~~
     ~~~
-    $g++ main.cpp -lopencv_core -I/usr/include/opencv4
+    $g++ main.cpp -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_videoio ... -I/usr/include/opencv4
     ~~~
+    - -lopencv_XXX は各種あるので、指定の有無は必要に応じて
     - meson
         ~~~
         dependency('opencv4')
@@ -434,3 +450,17 @@
         Compiler = meson.get_compiler('cpp')
         Compiler.find_library('hailort', dirs : '/usr/lib'),
         ~~~
+## Warning 等
+- 以下が出る場合
+    ~~~
+    QStandardPaths: wrong permissions on runtime directory /run/user/1000, 0770 instead of 0700
+    ~~~
+    - 以下のようにすると出なくなる (.bashrc 等に書いておくと良い)
+    ~~~
+    $chmod 0700 /run/user/1000
+    ~~~
+- 以下が出る場合
+    ~~~
+    libpng warning: iCCP: known incorrect sRGB profile
+    ~~~
+    - ?
