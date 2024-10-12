@@ -88,6 +88,9 @@
 - Wayland バージョンをインストールしていたものがあれば、アンインストールして、X11 バージョンにする
     - glfw3-wayland を glfw3 にするとか
 
+### 解像度 (ヘッドレス時)
+- ラズベリーアイコン - Preferences - Raspberry Pi Configuration - Display - Headless Resolution - 再起動
+
 ## 更新
 - 更新
     ~~~
