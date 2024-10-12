@@ -30,6 +30,9 @@ public:
 
 		//!< ネットワーク
 		auto Hef = hailort::Hef::create(std::data(HefFile));
+		if(!Hef){
+			std::cerr << "Hef file (" << HefFile << ") create failed, status = " << Hef.status() << std::endl;
+		}
 		const auto ConfigureParams = Hef->create_configure_params(HAILO_STREAM_INTERFACE_PCIE).value();
 		auto ConfiguredNetworkGroup = Device.value()->configure(Hef.value(), ConfigureParams)->at(0);
 		
