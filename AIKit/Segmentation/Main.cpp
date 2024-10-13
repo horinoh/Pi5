@@ -10,7 +10,7 @@
 #include <opencv2/opencv.hpp>
 #pragma GCC diagnostic pop
 
-class DepthEstimation : public Hailo
+class Segmentation : public Hailo
 {
 private:
 	using Super = Hailo;
@@ -26,7 +26,7 @@ public:
 			const auto& Shape = Front.get_info().shape;
 			cv::Mat InAI;
 			//!< スレッド自身に終了判断させる
-			while (IsRunning && HasInput) {
+			while (IsRunning) {
 				//!< 入力と出力がズレていかないように同期する
 				if(InFrameCount > OutFrameCount) { continue; }
 				++InFrameCount;
@@ -57,12 +57,40 @@ public:
 			const auto& Shape = Front.get_info().shape;
 			std::vector<uint8_t> OutAI(Front.get_frame_size());
 			//!< スレッド自身に終了判断させる
-			while (IsRunning && HasInput) {
+			while (IsRunning) {
 				++OutFrameCount;
 
 				//!< 出力を取得
 				Front.read(hailort::MemoryView(std::data(OutAI), std::size(OutAI)));
-				
+
+				{
+					//!< 先頭 uint16_t に検出数が格納されている
+					const auto Count = *reinterpret_cast<uint16_t*>(std::data(OutAI));
+					//!< その分オフセット
+					auto Offset = sizeof(uint16_t);
+
+					//!< 検出格納先
+					std::vector<hailort::hailo_detection_with_byte_mask_t> Detections;
+					Detectons.reserve(Count);
+					//!< 検出を格納
+					for(auto i = 0; i<Count;++i){
+						const auto Detection = reuinterpret_cast<hailort::hailo_detection_with_byte_mask_t*>(std::data(OutAI) + Offset);
+						Detections.emplace_back(*Detection);
+						Offset += sizeof(*Detection) + Detection->mask_size;
+					}
+
+					for(auto& i : Detections) {
+						//!< 幅、高さはピクセルではなく、画面に対する比率で格納されている
+						const auto WidthRate = i.box.x_max - i.box.x_min;
+						const auto HeightRate = i.box.y_max - i.box.y_min;
+						//!< 検出物毎にクラスが異なる
+						i.class_id;
+
+						
+					}
+				}
+
+
 				//!< OpenCV 形式へ
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
 
@@ -102,8 +130,6 @@ protected:
 	cv::Mat DepthMap;
 };
 
-//#define OUTPUT_VIDEO
-
 int main(int argc, char* argv[]) {
 	const auto Args = std::span<char*>(argv, argc);
 	//!< 引数列挙
@@ -115,25 +141,19 @@ int main(int argc, char* argv[]) {
 	auto CapturePath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
 	std::cout << "Capturing : \"" << CapturePath << "\"" << std::endl;
 
-	//!< 深度推定クラス
-	DepthEstimation DepEst;
+	//!< セグメンテーションクラス
+	Segmentation Seg;
 	
 	//!< 表示用
 	cv::Mat L, R, LR;
 	const auto LSize = cv::Size(320, 240); //!< 左 (右も同じ) のサイズ 
-#ifdef OUTPUT_VIDEO
-	//!< ビデオ書き出し
-	const auto Fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
-	cv::VideoWriter WriterL("RGB.mp4", Fourcc, DepEst.GetFps(), LSize);
-	cv::VideoWriter WriterR("D.mp4", Fourcc, DepEst.GetFps(), LSize, true);
-#endif
 
 	//!< 推定開始、ループ
-	DepEst.Start("scdepthv3.hef", CapturePath, 
+	Seg.Start("yolov5m-seg.hef", CapturePath, 
 	[&]() {
 		//!< 深度推定クラスからカラーマップ、深度マップを取得
-		const auto& CM = DepEst.GetColorMap();
-		const auto& DM = DepEst.GetDepthMap();
+		const auto& CM = Seg.GetColorMap();
+		const auto& DM = Seg.GetDepthMap();
 		if(CM.empty() || DM.empty()) { return true; }
 
 		//!< 左 : カラーマップ
@@ -144,12 +164,6 @@ int main(int argc, char* argv[]) {
 			cv::resize(DM, R, LSize, cv::INTER_AREA);
 		} DepEst.GetMutex().unlock();
 
-#ifdef OUTPUT_VIDEO
-		//!< 書き出し
-		WriterL << L;
-		WriterR << R;
-#endif	
-
 		//!< 連結する為に左右のタイプを 8UC3 に合わせる必要がある
 		cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
 		R.convertTo(R, CV_8UC3);
@@ -157,7 +171,7 @@ int main(int argc, char* argv[]) {
 		cv::hconcat(L, R, LR);
 
 		//!< 表示
-		cv::imshow("Color & Depth Map", LR);
+		cv::imshow("", LR);
 
 		constexpr auto ESC = 27;
 		if(ESC == cv::pollKey()) {

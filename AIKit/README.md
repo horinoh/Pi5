@@ -94,6 +94,12 @@
     $wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.11.0/hailo8l/scdepthv3.hef
     ~~~
 
+### Segmentation
+- yolov5m-seg.hef は [ここ](https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/yolov5m-seg.hef) からダウンロードする
+    ~~~
+    wget https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/yolov5m-seg.hef
+    ~~~
+
 <!--
 ### HailoRT ビルド (Windowsの場合)
 - [HailoRT](https://github.com/hailo-ai/hailort.git) をクローン

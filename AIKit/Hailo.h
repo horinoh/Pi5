@@ -51,7 +51,7 @@ public:
 		Inference(InputVstreams.value(), OutputVstreams.value(), CapturePath);
 
 		//!< ループ
-		while((IsRunning = Loop())) { 
+		while((IsRunning = Loop()) && HasInput) { 
 		}
 
 		//!< 終了、スレッド同期
@@ -71,5 +71,6 @@ public:
 	
 protected:
 	bool IsRunning = false;
+	bool HasInput = true;
 	std::vector<std::thread> Threads;
 };
