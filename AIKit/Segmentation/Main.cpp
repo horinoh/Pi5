@@ -26,7 +26,7 @@ public:
 			const auto& Shape = Front.get_info().shape;
 			cv::Mat InAI;
 			//!< スレッド自身に終了判断させる
-			while (IsRunning) {
+			while (Flags.all()) {
 				//!< 入力と出力がズレていかないように同期する
 				if(InFrameCount > OutFrameCount) { continue; }
 				++InFrameCount;
@@ -35,7 +35,7 @@ public:
 				Capture >> ColorMap;
 				if(ColorMap.empty()) {
 					std::cout << "Lost input" << std::endl;
-					HasInput = false;
+					Flags.reset(static_cast<size_t>(FLAGS::HasInput));
 					break;
 				}
 
@@ -57,7 +57,7 @@ public:
 			const auto& Shape = Front.get_info().shape;
 			std::vector<uint8_t> OutAI(Front.get_frame_size());
 			//!< スレッド自身に終了判断させる
-			while (IsRunning) {
+			while (Flags.all()) {
 				++OutFrameCount;
 
 				//!< 出力を取得

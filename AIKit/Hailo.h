@@ -1,3 +1,4 @@
+#include <bitset>
 #if false
 #include <format>
 #else
@@ -23,7 +24,8 @@ public:
 	}
 
 	virtual void Start(std::string_view HefFile, std::string_view CapturePath, std::function<bool()> Loop) {
-		IsRunning = true;
+		Flags.set(static_cast<size_t>(FLAGS::IsRunning));
+		Flags.set(static_cast<size_t>(FLAGS::HasInput));
 
 		//!< デバイス
 		const auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
@@ -51,8 +53,9 @@ public:
 		Inference(InputVstreams.value(), OutputVstreams.value(), CapturePath);
 
 		//!< ループ
-		while((IsRunning = Loop()) && HasInput) { 
-		}
+		do {
+			Flags[static_cast<size_t>(FLAGS::IsRunning)] = Loop();
+		} while(Flags.all());
 
 		//!< 終了、スレッド同期
 		Join();
@@ -70,7 +73,10 @@ public:
 	}
 	
 protected:
-	bool IsRunning = false;
-	bool HasInput = true;
+	enum class FLAGS : size_t {
+		IsRunning,
+		HasInput,
+	};
+	std::bitset<2> Flags;
 	std::vector<std::thread> Threads;
 };
