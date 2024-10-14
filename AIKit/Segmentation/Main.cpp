@@ -85,12 +85,13 @@ public:
 						const auto HeightRate = i.box.y_max - i.box.y_min;
 						//!< 検出物毎にクラスが異なる
 						i.class_id;
-
+						//i.mask[];
 						
+						//cv::rectangle(Mat, cv::Rect(i.box.x_min * Mat.cols, i.box.y_min * Mat.rows, WidthRate * Mat.cols, HeightRate * Mat.rows), cv::Vec3b(0, 255, 0), 1);
 					}
 				}
 
-
+#if false
 				//!< OpenCV 形式へ
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
 
@@ -109,6 +110,7 @@ public:
 					//!< 手前が白、奥が黒 (逆)
     				DepthMap.convertTo(DepthMap, CV_8U, -255 / (Mx - Mn), -Mn + 255);
 				} OutMutex.unlock();
+#endif
 			}
 		});
 	}
@@ -118,7 +120,7 @@ public:
 	std::mutex& GetMutex() { return OutMutex; }
 
 	const cv::Mat& GetColorMap() const { return ColorMap; }
-	const cv::Mat& GetDepthMap() const { return DepthMap; }
+//	const cv::Mat& GetDepthMap() const { return DepthMap; }
 
 protected:
 	int InFrameCount = 0;
@@ -127,7 +129,7 @@ protected:
 	std::mutex OutMutex;
 	
 	cv::Mat ColorMap;
-	cv::Mat DepthMap;
+//	cv::Mat DepthMap;
 };
 
 int main(int argc, char* argv[]) {
@@ -153,22 +155,22 @@ int main(int argc, char* argv[]) {
 	[&]() {
 		//!< 深度推定クラスからカラーマップ、深度マップを取得
 		const auto& CM = Seg.GetColorMap();
-		const auto& DM = Seg.GetDepthMap();
-		if(CM.empty() || DM.empty()) { return true; }
+	//	const auto& DM = Seg.GetDepthMap();
+		if(CM.empty()) { return true; }
 
 		//!< 左 : カラーマップ
 		cv::resize(CM, L, LSize, cv::INTER_AREA);
 
 		//!< 右 : 深度マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
-		DepEst.GetMutex().lock(); {
-			cv::resize(DM, R, LSize, cv::INTER_AREA);
-		} DepEst.GetMutex().unlock();
+		//DepEst.GetMutex().lock(); {
+		//	cv::resize(DM, R, LSize, cv::INTER_AREA);
+		//} DepEst.GetMutex().unlock();
 
 		//!< 連結する為に左右のタイプを 8UC3 に合わせる必要がある
-		cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
-		R.convertTo(R, CV_8UC3);
+		//cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
+		//R.convertTo(R, CV_8UC3);
 		//!< 水平連結
-		cv::hconcat(L, R, LR);
+		//cv::hconcat(L, R, LR);
 
 		//!< 表示
 		cv::imshow("", LR);
