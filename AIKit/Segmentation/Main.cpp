@@ -63,54 +63,42 @@ public:
 				//!< 出力を取得
 				Front.read(hailort::MemoryView(std::data(OutAI), std::size(OutAI)));
 
-				{
-					//!< 先頭 uint16_t に検出数が格納されている
-					const auto Count = *reinterpret_cast<uint16_t*>(std::data(OutAI));
-					//!< その分オフセット
-					auto Offset = sizeof(uint16_t);
+				//!< 先頭 uint16_t に「検出数」が格納されている
+				const auto Count = *reinterpret_cast<uint16_t*>(std::data(OutAI));
+				//!< 「検出数」分オフセット
+				auto Offset = sizeof(Count);
 
-					//!< 検出格納先
-					std::vector<hailort::hailo_detection_with_byte_mask_t> Detections;
-					Detectons.reserve(Count);
-					//!< 検出を格納
-					for(auto i = 0; i<Count;++i){
-						const auto Detection = reuinterpret_cast<hailort::hailo_detection_with_byte_mask_t*>(std::data(OutAI) + Offset);
-						Detections.emplace_back(*Detection);
-						Offset += sizeof(*Detection) + Detection->mask_size;
-					}
-
-					for(auto& i : Detections) {
-						//!< 幅、高さはピクセルではなく、画面に対する比率で格納されている
-						const auto WidthRate = i.box.x_max - i.box.x_min;
-						const auto HeightRate = i.box.y_max - i.box.y_min;
-						//!< 検出物毎にクラスが異なる
-						i.class_id;
-						//i.mask[];
-						
-						//cv::rectangle(Mat, cv::Rect(i.box.x_min * Mat.cols, i.box.y_min * Mat.rows, WidthRate * Mat.cols, HeightRate * Mat.rows), cv::Vec3b(0, 255, 0), 1);
-					}
+				//!< 検出格納先
+				std::vector<hailo_detection_with_byte_mask_t> Detections;
+				Detections.reserve(Count);
+				//!< 検出を格納
+				for(auto i = 0; i<Count;++i){
+					const auto Detection = reinterpret_cast<hailo_detection_with_byte_mask_t*>(std::data(OutAI) + Offset);
+					Detections.emplace_back(*Detection);
+					Offset += sizeof(*Detection) + Detection->mask_size;
 				}
 
-#if false
-				//!< OpenCV 形式へ
-				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
-
 				OutMutex.lock(); {
-					//!< 深度マップの調整
-					DepthMap = cv::Mat(Shape.height, Shape.width, CV_32F, cv::Scalar(0));
-					//!< -CVOutAI を指数として自然対数の底 e のべき乗が DepthMap に返る
-					cv::exp(-CVOutAI, DepthMap);
-    				DepthMap = 1 / (1 + DepthMap);
-    				DepthMap = 1 / (DepthMap * 10 + 0.009);
-    
-					double Mn, Mx;
-    				cv::minMaxIdx(DepthMap, &Mn, &Mx);
-					//!< 手前が黒、奥が白
-    				//DepthMap.convertTo(DepthMap, CV_8U, 255 / (Mx - Mn), -Mn);
-					//!< 手前が白、奥が黒 (逆)
-    				DepthMap.convertTo(DepthMap, CV_8U, -255 / (Mx - Mn), -Mn + 255);
+					DetectionMap = cv::Mat(Shape.height, Shape.width, CV_8UC3, cv::Vec3b(0, 0, 0));
+					for(auto& i : Detections) {
+						//i.class_id;
+						//i.score;	
+
+						//!< ボックスサイズはピクセルではなく、画面に対する比率で格納されている
+						const int BoxL = i.box.x_min * Shape.width;
+						const int BoxT = i.box.y_min * Shape.height;
+ 						const int BoxW = ceil((i.box.x_max - i.box.x_min) * Shape.width);
+        				const int BoxH = ceil((i.box.y_max - i.box.y_min) * Shape.height);
+						for(auto h = 0;h < BoxH;++h) {
+							for(auto w = 0;w < BoxW;++w) {
+								if(i.mask[h * BoxW + w]) {
+									//!< ROI (Region Of Interest)
+								}
+							}
+						}
+						cv::rectangle(DetectionMap, cv::Rect(BoxL, BoxT, BoxW, BoxH), cv::Vec3b(0, 255, 0), 1);
+					}	
 				} OutMutex.unlock();
-#endif
 			}
 		});
 	}
@@ -120,7 +108,7 @@ public:
 	std::mutex& GetMutex() { return OutMutex; }
 
 	const cv::Mat& GetColorMap() const { return ColorMap; }
-//	const cv::Mat& GetDepthMap() const { return DepthMap; }
+	const cv::Mat& GetDetectionMap() const { return DetectionMap; }
 
 protected:
 	int InFrameCount = 0;
@@ -129,7 +117,7 @@ protected:
 	std::mutex OutMutex;
 	
 	cv::Mat ColorMap;
-//	cv::Mat DepthMap;
+	cv::Mat DetectionMap;
 };
 
 int main(int argc, char* argv[]) {
@@ -155,25 +143,27 @@ int main(int argc, char* argv[]) {
 	[&]() {
 		//!< 深度推定クラスからカラーマップ、深度マップを取得
 		const auto& CM = Seg.GetColorMap();
-	//	const auto& DM = Seg.GetDepthMap();
-		if(CM.empty()) { return true; }
+		const auto& DM = Seg.GetDetectionMap();
+		if(CM.empty() || DM.empty()) { return true; }
 
 		//!< 左 : カラーマップ
 		cv::resize(CM, L, LSize, cv::INTER_AREA);
 
-		//!< 右 : 深度マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
-		//DepEst.GetMutex().lock(); {
-		//	cv::resize(DM, R, LSize, cv::INTER_AREA);
-		//} DepEst.GetMutex().unlock();
+		//!< 右 : 検出マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
+		Seg.GetMutex().lock(); {
+			cv::resize(DM, R, LSize, cv::INTER_AREA);
+		} Seg.GetMutex().unlock();
 
-		//!< 連結する為に左右のタイプを 8UC3 に合わせる必要がある
-		//cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
-		//R.convertTo(R, CV_8UC3);
+#if false
 		//!< 水平連結
-		//cv::hconcat(L, R, LR);
+		cv::hconcat(L, R, LR);
+#else
+		//!< ブレンド
+ 		cv::addWeighted(L, 1, R, 0.7, 0.0, LR);
+#endif
 
 		//!< 表示
-		cv::imshow("", LR);
+		cv::imshow("Color & Detection Map", LR);
 
 		constexpr auto ESC = 27;
 		if(ESC == cv::pollKey()) {
