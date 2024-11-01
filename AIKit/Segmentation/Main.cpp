@@ -78,7 +78,9 @@ public:
 					Offset += sizeof(*Detection) + Detection->mask_size;
 				}
 
-				OutMutex.lock(); {
+				{
+					std::lock_guard Lock(OutMutex);
+					
 					DetectionMap = cv::Mat(Shape.height, Shape.width, CV_8UC3, cv::Vec3b(0, 0, 0));
 					for(auto& i : Detections) {
 						//i.class_id;
@@ -98,7 +100,7 @@ public:
 						}
 						cv::rectangle(DetectionMap, cv::Rect(BoxL, BoxT, BoxW, BoxH), cv::Vec3b(0, 255, 0), 1);
 					}	
-				} OutMutex.unlock();
+				}
 			}
 		});
 	}
@@ -150,9 +152,11 @@ int main(int argc, char* argv[]) {
 		cv::resize(CM, L, LSize, cv::INTER_AREA);
 
 		//!< 右 : 検出マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
-		Seg.GetMutex().lock(); {
+		{
+			std::lock_guard Lock(Seg.GetMutex());
+
 			cv::resize(DM, R, LSize, cv::INTER_AREA);
-		} Seg.GetMutex().unlock();
+		}
 
 #if false
 		//!< 水平連結

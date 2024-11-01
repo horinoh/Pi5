@@ -66,7 +66,9 @@ public:
 				//!< OpenCV 形式へ
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
 
-				OutMutex.lock(); {
+				{
+					std::lock_guard Lock(OutMutex);
+
 					//!< 深度マップの調整
 					DepthMap = cv::Mat(Shape.height, Shape.width, CV_32F, cv::Scalar(0));
 					//!< -CVOutAI を指数として自然対数の底 e のべき乗が DepthMap に返る
@@ -80,7 +82,7 @@ public:
     				//DepthMap.convertTo(DepthMap, CV_8U, 255 / (Mx - Mn), -Mn);
 					//!< 手前が白、奥が黒 (逆)
     				DepthMap.convertTo(DepthMap, CV_8U, -255 / (Mx - Mn), -Mn + 255);
-				} OutMutex.unlock();
+				}
 			}
 		});
 	}
@@ -140,9 +142,11 @@ int main(int argc, char* argv[]) {
 		cv::resize(CM, L, LSize, cv::INTER_AREA);
 
 		//!< 右 : 深度マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
-		DepEst.GetMutex().lock(); {
+		{	
+			std::lock_guard Lock(DepEst.GetMutex());
+			
 			cv::resize(DM, R, LSize, cv::INTER_AREA);
-		} DepEst.GetMutex().unlock();
+		}
 
 #ifdef OUTPUT_VIDEO
 		//!< 書き出し
