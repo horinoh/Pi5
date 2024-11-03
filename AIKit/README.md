@@ -100,22 +100,17 @@
     wget https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/yolov5m-seg.hef
     ~~~
 
-<!--
-### HailoRT ビルド (Windowsの場合)
-- [HailoRT](https://github.com/hailo-ai/hailort.git) をクローン
-- CMake - Configure - Configure - Generate
-- HailoRT.sln を開いて ALLBUILD, INSTALL の Release をビルド、以下に作られる
-    - 実行ファイル      hailort/hailortcli/Release/hailortcli.exe
-    - 静的ライブラリ    hailort/libhailort/src/Release/libhailort.lib
-    - 動的ライブラリ    hailort/libhailort/src/Release/libhailort.dll
-- ここでは hailort/libhailort 以下に lib フォルダを作り、Release 以下をコピーした
-    - hailort/libhailort/lib/Release/libhailort.lib, libhailort.dll
-- ここでは hailort/libhailort を環境変数 HAILORT_SDK_PATH に設定した
-    ~~~
-    #include <hailo/hailort.h>
-    #pragma comment(lib, "libhailort.lib")
-    ~~~
--->
+### HailoRT (Windowsの場合)
+- [HailoRT](https://hailo.ai/developer-zone/software-downloads/) Windows 版を選択してダウンロード
+	- C:\Program Files\HailoRT 等にインストールされるので、ここでは (インストール先フォルダ) 環境変数 HAILORT_SDK_PATH を作成する
+	- HAILORT_SDK_PATH/bin は環境変数 Path に通しておく
+- ヘッダ、ライブラリ、DLL
+	~~~
+	HAILORT_SDK_PATH/include/hailo/*.h
+	HAILORT_SDK_PATH/lib/libhailort.lib
+	HAILORT_SDK_PATH/bin/*.dll
+	~~~
+	- Windows 版だと、hailort.hpp はビルドが通らないので hailort.h の方を使う
 
 <!--
 ## 自前のポストプロセスを書く場合

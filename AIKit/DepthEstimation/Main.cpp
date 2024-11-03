@@ -16,6 +16,7 @@ private:
 	using Super = Hailo;
 
 public:
+#ifdef USE_HAILOCPP
 	virtual void Inference(std::vector<hailort::InputVStream> &In, std::vector<hailort::OutputVStream> &Out, std::string_view CapturePath) override {
 		//!< AI 入力スレッド
 		Threads.emplace_back([&]() {
@@ -86,6 +87,86 @@ public:
 			}
 		});
 	}
+#else
+	virtual void Inference(hailo_input_vstream &In, hailo_output_vstream &Out, std::string_view CapturePath) override {
+			//!< AI 入力スレッド
+		Threads.emplace_back([&]() {
+			cv::VideoCapture Capture(std::data(CapturePath));
+			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
+
+			hailo_vstream_info_t Info;
+			hailo_get_input_vstream_info(In, &Info);
+			const auto& Shape = Info.shape;
+			size_t FrameSize;
+			hailo_get_input_vstream_frame_size(In, &FrameSize);
+
+			cv::Mat InAI;
+			//!< スレッド自身に終了判断させる
+			while (Flags.all()) {
+				//!< 入力と出力がズレていかないように同期する
+				if(InFrameCount > OutFrameCount) { continue; }
+				++InFrameCount;
+
+				//!< フレームを取得
+				Capture >> ColorMap;
+				if(ColorMap.empty()) {
+					std::cout << "Lost input" << std::endl;
+					Flags.reset(static_cast<size_t>(FLAGS::HasInput));
+					break;
+				}
+
+				//!< リサイズ
+				if(static_cast<uint32_t>(ColorMap.cols) != Shape.width || static_cast<uint32_t>(ColorMap.rows) != Shape.height) {
+            		cv::resize(ColorMap, InAI, cv::Size(Shape.width, Shape.height), cv::INTER_AREA);
+				} else {
+					InAI = ColorMap.clone();
+				}
+
+				//!< AI への入力 (書き込み)
+				hailo_vstream_write_raw_buffer(In, InAI.data, FrameSize);
+			}
+		});
+
+		//!< AI 出力スレッド
+		Threads.emplace_back([&](){
+			hailo_vstream_info_t Info;
+			hailo_get_output_vstream_info(Out, &Info);
+			const auto& Shape = Info.shape;
+			size_t FrameSize;
+			hailo_get_output_vstream_frame_size(Out, &FrameSize);
+
+			std::vector<uint8_t> OutAI(FrameSize);
+			//!< スレッド自身に終了判断させる
+			while (Flags.all()) {
+				++OutFrameCount;
+
+				//!< 出力を取得
+				hailo_vstream_read_raw_buffer(Out, std::data(OutAI), FrameSize);
+				
+				//!< OpenCV 形式へ
+				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
+
+				{
+					std::lock_guard Lock(OutMutex);
+
+					//!< 深度マップの調整
+					DepthMap = cv::Mat(Shape.height, Shape.width, CV_32F, cv::Scalar(0));
+					//!< -CVOutAI を指数として自然対数の底 e のべき乗が DepthMap に返る
+					cv::exp(-CVOutAI, DepthMap);
+    				DepthMap = 1 / (1 + DepthMap);
+    				DepthMap = 1 / (DepthMap * 10 + 0.009);
+    
+					double Mn, Mx;
+    				cv::minMaxIdx(DepthMap, &Mn, &Mx);
+					//!< 手前が黒、奥が白
+    				//DepthMap.convertTo(DepthMap, CV_8U, 255 / (Mx - Mn), -Mn);
+					//!< 手前が白、奥が黒 (逆)
+    				DepthMap.convertTo(DepthMap, CV_8U, -255 / (Mx - Mn), -Mn + 255);
+				}
+			}
+		});
+	}
+#endif
 
 	virtual int GetFps() const { return 30; }
 
