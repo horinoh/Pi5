@@ -123,7 +123,7 @@ public:
 				}
 
 				//!< AI への入力 (書き込み)
-				hailo_vstream_write_raw_buffer(In, InAI.data, FrameSize);
+				hailo_vstream_write_raw_buffer(In, InAI.data, InAI.total() * InAI.elemSize());
 			}
 		});
 
@@ -141,7 +141,7 @@ public:
 				++OutFrameCount;
 
 				//!< 出力を取得
-				hailo_vstream_read_raw_buffer(Out, std::data(OutAI), FrameSize);
+				hailo_vstream_read_raw_buffer(Out, std::data(OutAI), std::size(OutAI));
 				
 				//!< OpenCV 形式へ
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
