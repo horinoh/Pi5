@@ -88,17 +88,10 @@
 - [参考 (入出力部分)](https://github.com/hailo-ai/hailort/tree/master/hailort/libhailort/examples)
 - [参考 (組み込み)](https://github.com/hailo-ai/Hailo-Application-Code-Examples/tree/main/runtime/cpp)
 
-### Depth Estimation
-- scdepthv3.hef は [ここ](https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.11.0/hailo8l/scdepthv3.hef) からダウンロードする
-    ~~~
-    $wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.11.0/hailo8l/scdepthv3.hef
-    ~~~
-
-### Segmentation
-- yolov5m-seg.hef は [ここ](https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/yolov5m-seg.hef) からダウンロードする
-    ~~~
-    wget https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/yolov5m-seg.hef
-    ~~~
+### [Hef ファイル](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/PUBLIC_MODELS.rst)
+- Hailo-8L の Compiled をダウンロードする
+    - scdepthv3.hef
+    - yolov5m-seg.hef
 
 ### HailoRT (Windowsの場合)
 - [HailoRT](https://hailo.ai/developer-zone/software-downloads/) Windows 版を選択してダウンロード
@@ -111,6 +104,19 @@
 	HAILORT_SDK_PATH/bin/*.dll
 	~~~
 	- Windows 版だと、hailort.hpp はビルドが通らないので hailort.h の方を使う
+
+### 自作プログラム
+#### Depth Estimation
+- scdepthv3.hef を [ここ](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/PUBLIC_MODELS.rst) からダウンロードする
+    ~~~
+    $wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.13.0/hailo8l/scdepthv3.hef
+    ~~~
+
+#### Segmentation
+- yolov5m-seg.hef を [ここ](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/PUBLIC_MODELS.rst) からダウンロードする
+    ~~~
+    wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.13.0/hailo8l/yolov5m_seg.hef
+    ~~~
 
 <!--
 ## 自前のポストプロセスを書く場合
