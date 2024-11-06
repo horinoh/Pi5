@@ -4,11 +4,7 @@
 #include <span>
 
 #include "../Hailo.h"
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
-#include <opencv2/opencv.hpp>
-#pragma GCC diagnostic pop
+#include "../CV.h"
 
 class Segmentation : public Hailo
 {
@@ -239,7 +235,7 @@ int main(int argc, char* argv[]) {
 	const auto LSize = cv::Size(320, 240); //!< 左 (右も同じ) のサイズ 
 
 	//!< 推定開始、ループ	
-	Seg.Start("yolov5m-seg.hef", CapturePath, 
+	Seg.Start("yolov5m_seg.hef", CapturePath, 
 	[&]() {
 		//!< 深度推定クラスからカラーマップ、深度マップを取得
 		const auto& CM = Seg.GetColorMap();

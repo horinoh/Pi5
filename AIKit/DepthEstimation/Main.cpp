@@ -4,11 +4,7 @@
 #include <span>
 
 #include "../Hailo.h"
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
-#include <opencv2/opencv.hpp>
-#pragma GCC diagnostic pop
+#include "../CV.h"
 
 class DepthEstimation : public Hailo
 {
