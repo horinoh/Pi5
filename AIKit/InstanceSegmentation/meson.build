@@ -1,4 +1,4 @@
-project('Segmentation', 'cpp', version : '0.1', default_options : ['warning_level=3', 'cpp_std=c++20'])
+project('InstaceSegmentation', 'cpp', version : '0.1', default_options : ['warning_level=3', 'cpp_std=c++20'])
 
 # 追加のインクルード
 Inc = [
@@ -11,4 +11,4 @@ Lib = [
 	dependency('opencv4')
 ]
 
-executable('Segmentation', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
+executable('InstanceSegmentation', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
