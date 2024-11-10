@@ -1,0 +1,9 @@
+*.sdf
+*.suo
+*.exe
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+*.vcxproj.user
+.vs/

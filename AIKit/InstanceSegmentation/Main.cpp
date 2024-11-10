@@ -13,8 +13,8 @@ private:
 
 public:
 #ifdef USE_HAILOCPP
-	virtual void Inference(std::vector<hailort::InputVStream> &In, std::vector<hailort::OutputVStream> &Out, std::string_view CapturePath) override {
-		//!< AI å…¥åŠ›ã‚¹ãƒ¬ãƒƒãƒ‰
+	virtual void Inference(std::vector<hailort::InputVStream>& In, std::vector<hailort::OutputVStream>& Out, std::string_view CapturePath) override {
+		//!< AI “ü—ÍƒXƒŒƒbƒh
 		Threads.emplace_back([&]() {
 			cv::VideoCapture Capture(std::data(CapturePath));
 			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
@@ -22,54 +22,55 @@ public:
 			auto& Front = In.front();
 			const auto& Shape = Front.get_info().shape;
 			cv::Mat InAI;
-			//!< ã‚¹ãƒ¬ãƒƒãƒ‰è‡ªèº«ã«çµ‚äº†åˆ¤æ–­ã•ã›ã‚‹
+			//!< ƒXƒŒƒbƒhŽ©g‚ÉI—¹”»’f‚³‚¹‚é
 			while (Flags.all()) {
-				//!< å…¥åŠ›ã¨å‡ºåŠ›ãŒã‚ºãƒ¬ã¦ã„ã‹ãªã„ã‚ˆã†ã«åŒæœŸã™ã‚‹
-				if(InFrameCount > OutFrameCount) { continue; }
+				//!< “ü—Í‚Æo—Í‚ªƒYƒŒ‚Ä‚¢‚©‚È‚¢‚æ‚¤‚É“¯Šú‚·‚é
+				if (InFrameCount > OutFrameCount) { continue; }
 				++InFrameCount;
 
-				//!< ãƒ•ãƒ¬ãƒ¼ãƒ ã‚’å–å¾—
+				//!< ƒtƒŒ[ƒ€‚ðŽæ“¾
 				Capture >> ColorMap;
-				if(ColorMap.empty()) {
+				if (ColorMap.empty()) {
 					std::cout << "Lost input" << std::endl;
 					Flags.reset(static_cast<size_t>(FLAGS::HasInput));
 					break;
 				}
 
-				//!< ãƒªã‚µã‚¤ã‚º
-				if(static_cast<uint32_t>(ColorMap.cols) != Shape.width || static_cast<uint32_t>(ColorMap.rows) != Shape.height) {
-            		cv::resize(ColorMap, InAI, cv::Size(Shape.width, Shape.height), cv::INTER_AREA);
-				} else {
+				//!< ƒŠƒTƒCƒY
+				if (static_cast<uint32_t>(ColorMap.cols) != Shape.width || static_cast<uint32_t>(ColorMap.rows) != Shape.height) {
+					cv::resize(ColorMap, InAI, cv::Size(Shape.width, Shape.height), cv::INTER_AREA);
+				}
+				else {
 					InAI = ColorMap.clone();
 				}
 
-				//!< AI ã¸ã®å…¥åŠ› (æ›¸ãè¾¼ã¿)
+				//!< AI ‚Ö‚Ì“ü—Í (‘‚«ž‚Ý)
 				Front.write(hailort::MemoryView(InAI.data, Front.get_frame_size()));
 			}
-		});
+			});
 
-		//!< AI å‡ºåŠ›ã‚¹ãƒ¬ãƒƒãƒ‰
-		Threads.emplace_back([&](){
+		//!< AI o—ÍƒXƒŒƒbƒh
+		Threads.emplace_back([&]() {
 			auto& Front = Out.front();
 			const auto& Shape = Front.get_info().shape;
 			std::vector<uint8_t> OutAI(Front.get_frame_size());
-			//!< ã‚¹ãƒ¬ãƒƒãƒ‰è‡ªèº«ã«çµ‚äº†åˆ¤æ–­ã•ã›ã‚‹
+			//!< ƒXƒŒƒbƒhŽ©g‚ÉI—¹”»’f‚³‚¹‚é
 			while (Flags.all()) {
 				++OutFrameCount;
 
-				//!< å‡ºåŠ›ã‚’å–å¾—
+				//!< o—Í‚ðŽæ“¾
 				Front.read(hailort::MemoryView(std::data(OutAI), std::size(OutAI)));
 
-				//!< å…ˆé ­ uint16_t ã«ã€Œæ¤œå‡ºæ•°ã€ãŒæ ¼ç´ã•ã‚Œã¦ã„ã‚‹
+				//!< æ“ª uint16_t ‚ÉuŒŸo”v‚ªŠi”[‚³‚ê‚Ä‚¢‚é
 				const auto Count = *reinterpret_cast<uint16_t*>(std::data(OutAI));
-				//!< ã€Œæ¤œå‡ºæ•°ã€åˆ†ã‚ªãƒ•ã‚»ãƒƒãƒˆ
+				//!< uŒŸo”v•ªƒIƒtƒZƒbƒg
 				auto Offset = sizeof(Count);
 
-				//!< æ¤œå‡ºæ ¼ç´å…ˆ
+				//!< ŒŸoŠi”[æ
 				std::vector<hailo_detection_with_byte_mask_t> Detections;
 				Detections.reserve(Count);
-				//!< æ¤œå‡ºã‚’æ ¼ç´
-				for(auto i = 0; i<Count;++i){
+				//!< ŒŸo‚ðŠi”[
+				for (auto i = 0; i < Count; ++i) {
 					const auto Detection = reinterpret_cast<hailo_detection_with_byte_mask_t*>(std::data(OutAI) + Offset);
 					Detections.emplace_back(*Detection);
 					Offset += sizeof(*Detection) + Detection->mask_size;
@@ -77,33 +78,33 @@ public:
 
 				{
 					std::lock_guard Lock(OutMutex);
-					
+
 					DetectionMap = cv::Mat(Shape.height, Shape.width, CV_8UC3, cv::Vec3b(0, 0, 0));
-					for(auto& i : Detections) {
+					for (auto& i : Detections) {
 						//i.class_id;
 						//i.score;	
 
-						//!< ãƒœãƒƒã‚¯ã‚¹ã‚µã‚¤ã‚ºã¯ãƒ”ã‚¯ã‚»ãƒ«ã§ã¯ãªãã€ç”»é¢ã«å¯¾ã™ã‚‹æ¯”çŽ‡ã§æ ¼ç´ã•ã‚Œã¦ã„ã‚‹
+						//!< ƒ{ƒbƒNƒXƒTƒCƒY‚ÍƒsƒNƒZƒ‹‚Å‚Í‚È‚­A‰æ–Ê‚É‘Î‚·‚é”ä—¦‚ÅŠi”[‚³‚ê‚Ä‚¢‚é
 						const int BoxL = i.box.x_min * Shape.width;
 						const int BoxT = i.box.y_min * Shape.height;
- 						const int BoxW = ceil((i.box.x_max - i.box.x_min) * Shape.width);
-        				const int BoxH = ceil((i.box.y_max - i.box.y_min) * Shape.height);
-						for(auto h = 0;h < BoxH;++h) {
-							for(auto w = 0;w < BoxW;++w) {
-								if(i.mask[h * BoxW + w]) {
+						const int BoxW = ceil((i.box.x_max - i.box.x_min) * Shape.width);
+						const int BoxH = ceil((i.box.y_max - i.box.y_min) * Shape.height);
+						for (auto h = 0; h < BoxH; ++h) {
+							for (auto w = 0; w < BoxW; ++w) {
+								if (i.mask[h * BoxW + w]) {
 									//!< ROI (Region Of Interest)
 								}
 							}
 						}
 						cv::rectangle(DetectionMap, cv::Rect(BoxL, BoxT, BoxW, BoxH), cv::Vec3b(0, 255, 0), 1);
-					}	
+					}
 				}
 			}
-		});
+			});
 	}
 #else
-	virtual void Inference(hailo_input_vstream &In, hailo_output_vstream &Out, std::string_view CapturePath) override {
-		//!< AI å…¥åŠ›ã‚¹ãƒ¬ãƒƒãƒ‰
+	virtual void Inference(hailo_input_vstream& In, hailo_output_vstream& Out, std::string_view CapturePath) override {
+		//!< AI “ü—ÍƒXƒŒƒbƒh
 		Threads.emplace_back([&]() {
 			cv::VideoCapture Capture(std::data(CapturePath));
 			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
@@ -115,57 +116,58 @@ public:
 			hailo_get_input_vstream_frame_size(In, &FrameSize);
 
 			cv::Mat InAI;
-			//!< ã‚¹ãƒ¬ãƒƒãƒ‰è‡ªèº«ã«çµ‚äº†åˆ¤æ–­ã•ã›ã‚‹
+			//!< ƒXƒŒƒbƒhŽ©g‚ÉI—¹”»’f‚³‚¹‚é
 			while (Flags.all()) {
-				//!< å…¥åŠ›ã¨å‡ºåŠ›ãŒã‚ºãƒ¬ã¦ã„ã‹ãªã„ã‚ˆã†ã«åŒæœŸã™ã‚‹
-				if(InFrameCount > OutFrameCount) { continue; }
+				//!< “ü—Í‚Æo—Í‚ªƒYƒŒ‚Ä‚¢‚©‚È‚¢‚æ‚¤‚É“¯Šú‚·‚é
+				if (InFrameCount > OutFrameCount) { continue; }
 				++InFrameCount;
 
-				//!< ãƒ•ãƒ¬ãƒ¼ãƒ ã‚’å–å¾—
+				//!< ƒtƒŒ[ƒ€‚ðŽæ“¾
 				Capture >> ColorMap;
-				if(ColorMap.empty()) {
+				if (ColorMap.empty()) {
 					std::cout << "Lost input" << std::endl;
 					Flags.reset(static_cast<size_t>(FLAGS::HasInput));
 					break;
 				}
 
-				//!< ãƒªã‚µã‚¤ã‚º
-				if(static_cast<uint32_t>(ColorMap.cols) != Shape.width || static_cast<uint32_t>(ColorMap.rows) != Shape.height) {
-            		cv::resize(ColorMap, InAI, cv::Size(Shape.width, Shape.height), cv::INTER_AREA);
-				} else {
+				//!< ƒŠƒTƒCƒY
+				if (static_cast<uint32_t>(ColorMap.cols) != Shape.width || static_cast<uint32_t>(ColorMap.rows) != Shape.height) {
+					cv::resize(ColorMap, InAI, cv::Size(Shape.width, Shape.height), cv::INTER_AREA);
+				}
+				else {
 					InAI = ColorMap.clone();
 				}
 
-				//!< AI ã¸ã®å…¥åŠ› (æ›¸ãè¾¼ã¿)
+				//!< AI ‚Ö‚Ì“ü—Í (‘‚«ž‚Ý)
 				hailo_vstream_write_raw_buffer(In, InAI.data, InAI.total() * InAI.elemSize());
 			}
-		});
+			});
 
-		//!< AI å‡ºåŠ›ã‚¹ãƒ¬ãƒƒãƒ‰
-		Threads.emplace_back([&](){
+		//!< AI o—ÍƒXƒŒƒbƒh
+		Threads.emplace_back([&]() {
 			hailo_vstream_info_t Info;
 			hailo_get_output_vstream_info(Out, &Info);
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
 			hailo_get_output_vstream_frame_size(Out, &FrameSize);
 			std::vector<uint8_t> OutAI(FrameSize);
-			//!< ã‚¹ãƒ¬ãƒƒãƒ‰è‡ªèº«ã«çµ‚äº†åˆ¤æ–­ã•ã›ã‚‹
+			//!< ƒXƒŒƒbƒhŽ©g‚ÉI—¹”»’f‚³‚¹‚é
 			while (Flags.all()) {
 				++OutFrameCount;
 
-				//!< å‡ºåŠ›ã‚’å–å¾—
+				//!< o—Í‚ðŽæ“¾
 				hailo_vstream_read_raw_buffer(Out, std::data(OutAI), std::size(OutAI));
 
-				//!< å…ˆé ­ uint16_t ã«ã€Œæ¤œå‡ºæ•°ã€ãŒæ ¼ç´ã•ã‚Œã¦ã„ã‚‹
+				//!< æ“ª uint16_t ‚ÉuŒŸo”v‚ªŠi”[‚³‚ê‚Ä‚¢‚é
 				const auto Count = *reinterpret_cast<uint16_t*>(std::data(OutAI));
-				//!< ã€Œæ¤œå‡ºæ•°ã€åˆ†ã‚ªãƒ•ã‚»ãƒƒãƒˆ
+				//!< uŒŸo”v•ªƒIƒtƒZƒbƒg
 				auto Offset = sizeof(Count);
 
-				//!< æ¤œå‡ºæ ¼ç´å…ˆ
+				//!< ŒŸoŠi”[æ
 				std::vector<hailo_detection_with_byte_mask_t> Detections;
 				Detections.reserve(Count);
-				//!< æ¤œå‡ºã‚’æ ¼ç´
-				for(auto i = 0; i<Count;++i){
+				//!< ŒŸo‚ðŠi”[
+				for (auto i = 0; i < Count; ++i) {
 					const auto Detection = reinterpret_cast<hailo_detection_with_byte_mask_t*>(std::data(OutAI) + Offset);
 					Detections.emplace_back(*Detection);
 					Offset += sizeof(*Detection) + Detection->mask_size;
@@ -173,29 +175,29 @@ public:
 
 				{
 					std::lock_guard Lock(OutMutex);
-					
+
 					DetectionMap = cv::Mat(Shape.height, Shape.width, CV_8UC3, cv::Vec3b(0, 0, 0));
-					for(auto& i : Detections) {
+					for (auto& i : Detections) {
 						//i.class_id;
 						//i.score;	
 
-						//!< ãƒœãƒƒã‚¯ã‚¹ã‚µã‚¤ã‚ºã¯ãƒ”ã‚¯ã‚»ãƒ«ã§ã¯ãªãã€ç”»é¢ã«å¯¾ã™ã‚‹æ¯”çŽ‡ã§æ ¼ç´ã•ã‚Œã¦ã„ã‚‹
+						//!< ƒ{ƒbƒNƒXƒTƒCƒY‚ÍƒsƒNƒZƒ‹‚Å‚Í‚È‚­A‰æ–Ê‚É‘Î‚·‚é”ä—¦‚ÅŠi”[‚³‚ê‚Ä‚¢‚é
 						const int BoxL = i.box.x_min * Shape.width;
 						const int BoxT = i.box.y_min * Shape.height;
- 						const int BoxW = ceil((i.box.x_max - i.box.x_min) * Shape.width);
-        				const int BoxH = ceil((i.box.y_max - i.box.y_min) * Shape.height);
-						for(auto h = 0;h < BoxH;++h) {
-							for(auto w = 0;w < BoxW;++w) {
-								if(i.mask[h * BoxW + w]) {
+						const int BoxW = ceil((i.box.x_max - i.box.x_min) * Shape.width);
+						const int BoxH = ceil((i.box.y_max - i.box.y_min) * Shape.height);
+						for (auto h = 0; h < BoxH; ++h) {
+							for (auto w = 0; w < BoxW; ++w) {
+								if (i.mask[h * BoxW + w]) {
 									//!< ROI (Region Of Interest)
 								}
 							}
 						}
 						cv::rectangle(DetectionMap, cv::Rect(BoxL, BoxT, BoxW, BoxH), cv::Vec3b(0, 255, 0), 1);
-					}	
+					}
 				}
 			}
-		});
+			});
 	}
 #endif
 
@@ -211,65 +213,64 @@ protected:
 	int OutFrameCount = 0;
 
 	std::mutex OutMutex;
-	
+
 	cv::Mat ColorMap;
 	cv::Mat DetectionMap;
 };
 
 int main(int argc, char* argv[]) {
 	const auto Args = std::span<char*>(argv, argc);
-	//!< å¼•æ•°åˆ—æŒ™
+	//!< ˆø”—ñ‹“
 	//for(int Index = 0; auto i : Args){ std::cout << "Args[" << Index++ << "] " << i << std::endl; }
 
-	//!< å…¥åŠ›ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ•ã‚¡ã‚¤ãƒ«ã‚’å¼•æ•°ã‹ã‚‰å–å¾—ã€æ˜Žç¤ºçš„ã«æŒ‡å®šãŒç„¡ã„å ´åˆã¯ã‚«ãƒ¡ãƒ©ç”»åƒã‚’ä½¿ç”¨
-	//!< (ã‚«ãƒ¡ãƒ©ç”»åƒã¯ VideoCapture() ã¸ Gstreamer ã®å¼•æ•°ã‚’æ¸¡ã™å½¢ã§ä½œæˆ)
+	//!< “ü—ÍƒLƒƒƒvƒ`ƒƒƒtƒ@ƒCƒ‹‚ðˆø”‚©‚çŽæ“¾A–¾Ž¦“I‚ÉŽw’è‚ª–³‚¢ê‡‚ÍƒJƒƒ‰‰æ‘œ‚ðŽg—p
+	//!< (ƒJƒƒ‰‰æ‘œ‚Í VideoCapture() ‚Ö Gstreamer ‚Ìˆø”‚ð“n‚·Œ`‚Åì¬)
 	const auto Cam = Hailo::GetLibCameGSTStr(1280, 960, 30);
 	auto CapturePath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
 	std::cout << "Capturing : \"" << CapturePath << "\"" << std::endl;
 
-	//!< ã‚»ã‚°ãƒ¡ãƒ³ãƒ†ãƒ¼ã‚·ãƒ§ãƒ³ã‚¯ãƒ©ã‚¹
+	//!< ƒZƒOƒƒ“ƒe[ƒVƒ‡ƒ“ƒNƒ‰ƒX
 	Segmentation Seg;
-	
-	//!< è¡¨ç¤ºç”¨
+
+	//!< •\Ž¦—p
 	cv::Mat L, R, LR;
-	const auto LSize = cv::Size(320, 240); //!< å·¦ (å³ã‚‚åŒã˜) ã®ã‚µã‚¤ã‚º 
+	const auto LSize = cv::Size(320, 240); //!< ¶ (‰E‚à“¯‚¶) ‚ÌƒTƒCƒY 
 
-	//!< æŽ¨å®šé–‹å§‹ã€ãƒ«ãƒ¼ãƒ—	
-	Seg.Start("yolov5m_seg.hef", CapturePath, 
-	[&]() {
-		//!< æ·±åº¦æŽ¨å®šã‚¯ãƒ©ã‚¹ã‹ã‚‰ã‚«ãƒ©ãƒ¼ãƒžãƒƒãƒ—ã€æ·±åº¦ãƒžãƒƒãƒ—ã‚’å–å¾—
-		const auto& CM = Seg.GetColorMap();
-		const auto& DM = Seg.GetDetectionMap();
-		if(CM.empty() || DM.empty()) { return true; }
+	//!< „’èŠJŽnAƒ‹[ƒv	
+	Seg.Start("yolov5m_seg.hef", CapturePath,
+		[&]() {
+			//!< [“x„’èƒNƒ‰ƒX‚©‚çƒJƒ‰[ƒ}ƒbƒvA[“xƒ}ƒbƒv‚ðŽæ“¾
+			const auto& CM = Seg.GetColorMap();
+			const auto& DM = Seg.GetDetectionMap();
+			if (CM.empty() || DM.empty()) { return true; }
 
-		//!< å·¦ : ã‚«ãƒ©ãƒ¼ãƒžãƒƒãƒ—
-		cv::resize(CM, L, LSize, cv::INTER_AREA);
+			//!< ¶ : ƒJƒ‰[ƒ}ƒbƒv
+			cv::resize(CM, L, LSize, cv::INTER_AREA);
 
-		//!< å³ : æ¤œå‡ºãƒžãƒƒãƒ— (AI ã®å‡ºåŠ›ã‚’åˆ¥ã‚¹ãƒ¬ãƒƒãƒ‰ã§æ·±åº¦ãƒžãƒƒãƒ—ã¸åŠ å·¥ã—ã¦ã„ã‚‹ã®ã§ã€ãƒ­ãƒƒã‚¯ã™ã‚‹å¿…è¦ãŒã‚ã‚‹)
-		{
-			std::lock_guard Lock(Seg.GetMutex());
+			//!< ‰E : ŒŸoƒ}ƒbƒv (AI ‚Ìo—Í‚ð•ÊƒXƒŒƒbƒh‚Å[“xƒ}ƒbƒv‚Ö‰ÁH‚µ‚Ä‚¢‚é‚Ì‚ÅAƒƒbƒN‚·‚é•K—v‚ª‚ ‚é)
+			{
+				std::lock_guard Lock(Seg.GetMutex());
 
-			cv::resize(DM, R, LSize, cv::INTER_AREA);
-		}
+				cv::resize(DM, R, LSize, cv::INTER_AREA);
+			}
 
 #if false
-		//!< æ°´å¹³é€£çµ
-		cv::hconcat(L, R, LR);
+			//!< …•½˜AŒ‹
+			cv::hconcat(L, R, LR);
 #else
-		//!< ãƒ–ãƒ¬ãƒ³ãƒ‰
- 		cv::addWeighted(L, 1, R, 0.7, 0.0, LR);
+			//!< ƒuƒŒƒ“ƒh
+			cv::addWeighted(L, 1, R, 0.7, 0.0, LR);
 #endif
 
-		//!< è¡¨ç¤º
-		cv::imshow("Color & Detection Map", LR);
+			//!< •\Ž¦
+			cv::imshow("Color & Detection Map", LR);
 
-		constexpr auto ESC = 27;
-		if(ESC == cv::pollKey()) {
-			return false;
-		}
-		return true;
-	});
+			constexpr auto ESC = 27;
+			if (ESC == cv::pollKey()) {
+				return false;
+			}
+			return true;
+		});
 
 	exit(EXIT_SUCCESS);
 }
-	

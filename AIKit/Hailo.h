@@ -1,3 +1,5 @@
+#pragma once
+
 #include <bitset>
 #if false
 #include <format>
@@ -6,6 +8,7 @@
 #endif
 #include <thread>
 #include <functional>
+#include <string_view>
 
 //#define USE_HAILOCPP
 #ifdef USE_HAILOCPP
@@ -14,17 +17,21 @@
 #include <hailo/hailort.h>
 #endif
 
-class Hailo 
+#ifdef _WIN64
+#pragma comment(lib, "libhailort.lib")
+#endif
+
+class Hailo
 {
 public:
-	//!< ã‚«ãƒ¡ãƒ©ç”»åƒã‚’å–å¾—ã™ã‚‹ã®ã«å¿…è¦ãªã€cv::VideoCapture() ã¸å¼•æ•° (æ–‡å­—åˆ—) ã‚’ä½œæˆ
-	//!< (OpenCV ã§ã¯ BGR ãªã®ã§ "format=BGR" ã‚’æŒ‡å®šã™ã‚‹å¿…è¦ãŒã‚ã‚‹)
+	//!< ƒJƒƒ‰‰æ‘œ‚ðŽæ“¾‚·‚é‚Ì‚É•K—v‚ÈAcv::VideoCapture() ‚Öˆø” (•¶Žš—ñ) ‚ðì¬
+	//!< (OpenCV ‚Å‚Í BGR ‚È‚Ì‚Å "format=BGR" ‚ðŽw’è‚·‚é•K—v‚ª‚ ‚é)
 	static std::string GetLibCameGSTStr(const int Width, const int Height, const int FPS) {
 #if false
 		return std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", Width, Height, FPS);
 #else
 		std::stringstream SS;
-		SS << "libcamerasrc ! video/x-raw, width=" << Width  << ", height=" << Height << ", framerate=" << FPS << "/1, format=BGR, ! appsink";	
+		SS << "libcamerasrc ! video/x-raw, width=" << Width << ", height=" << Height << ", framerate=" << FPS << "/1, format=BGR, ! appsink";
 		return SS.str();
 #endif
 	}
@@ -34,36 +41,36 @@ public:
 		Flags.set(static_cast<size_t>(FLAGS::HasInput));
 
 #ifdef USE_HAILOCPP
-		//!< ãƒ‡ãƒã‚¤ã‚¹
+		//!< ƒfƒoƒCƒX
 		const auto Device = hailort::Device::create_pcie(hailort::Device::scan_pcie().value()[0]);
 
-		//!< ãƒãƒƒãƒˆãƒ¯ãƒ¼ã‚¯
+		//!< ƒlƒbƒgƒ[ƒN
 		auto Hef = hailort::Hef::create(std::data(HefFile));
-		if(!Hef){
+		if (!Hef) {
 			std::cerr << "Hef file (" << HefFile << ") create failed, status = " << Hef.status() << std::endl;
 		}
 		const auto ConfigureParams = Hef->create_configure_params(HAILO_STREAM_INTERFACE_PCIE).value();
 		auto ConfiguredNetworkGroup = Device.value()->configure(Hef.value(), ConfigureParams)->at(0);
-		
-		//!< å…¥å‡ºåŠ›ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿
+
+		//!< “üo—Íƒpƒ‰ƒ[ƒ^
 		const auto InputParams = ConfiguredNetworkGroup->make_input_vstream_params(true, HAILO_FORMAT_TYPE_UINT8, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value();
 		const auto OutputParams = ConfiguredNetworkGroup->make_output_vstream_params(false, HAILO_FORMAT_TYPE_FLOAT32, HAILO_DEFAULT_VSTREAM_TIMEOUT_MS, HAILO_DEFAULT_VSTREAM_QUEUE_SIZE).value();
 
-		//!< å…¥å‡ºåŠ› (å…¥åŠ›ã¸æ›¸ãè¾¼ã‚€ã¨ AI ã«å‡¦ç†ã•ã‚Œã¦å‡ºåŠ›ã«è¿”ã‚‹)
+		//!< “üo—Í (“ü—Í‚Ö‘‚«ž‚Þ‚Æ AI ‚Éˆ—‚³‚ê‚Äo—Í‚É•Ô‚é)
 		auto InputVstreams = hailort::VStreamsBuilder::create_input_vstreams(*ConfiguredNetworkGroup, InputParams);
 		auto OutputVstreams = hailort::VStreamsBuilder::create_output_vstreams(*ConfiguredNetworkGroup, OutputParams);
 
-		//!< AI ãƒãƒƒãƒˆãƒ¯ãƒ¼ã‚¯ã®ã‚¢ã‚¯ãƒ†ã‚£ãƒ™ãƒ¼ãƒˆ
+		//!< AI ƒlƒbƒgƒ[ƒN‚ÌƒAƒNƒeƒBƒx[ƒg
 		const auto ActivatedNetworkGroup = ConfiguredNetworkGroup->activate();
 
-		//!< æŽ¨è«–é–‹å§‹
+		//!< „˜_ŠJŽn
 		Inference(InputVstreams.value(), OutputVstreams.value(), CapturePath);
 #else
-		//!< ãƒ‡ãƒã‚¤ã‚¹
+		//!< ƒfƒoƒCƒX
 		hailo_device Device;
 		hailo_create_pcie_device(nullptr, &Device);
-		
-		//!< ãƒãƒƒãƒˆãƒ¯ãƒ¼ã‚¯
+
+		//!< ƒlƒbƒgƒ[ƒN
 		hailo_hef Hef;
 		hailo_create_hef_file(&Hef, std::data(HefFile));
 		hailo_configure_params_t ConfigureParams;
@@ -76,7 +83,7 @@ public:
 
 		auto& CNG = ConfiguredNetworkGroups.front();
 
-		//!< å…¥å‡ºåŠ›ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿
+		//!< “üo—Íƒpƒ‰ƒ[ƒ^
 		std::vector<hailo_input_vstream_params_by_name_t> InputVstreamParamsByName(HAILO_MAX_STREAM_NAME_SIZE);
 		Count = std::size(InputVstreamParamsByName);
 		hailo_make_input_vstream_params(CNG, true, HAILO_FORMAT_TYPE_UINT8, std::data(InputVstreamParamsByName), &Count);
@@ -87,43 +94,43 @@ public:
 		hailo_make_output_vstream_params(CNG, false, HAILO_FORMAT_TYPE_FLOAT32, std::data(OutputVstreamParamsByName), &Count);
 		OutputVstreamParamsByName.resize(Count);
 
-		//!< å…¥å‡ºåŠ› (å…¥åŠ›ã¸æ›¸ãè¾¼ã‚€ã¨ AI ã«å‡¦ç†ã•ã‚Œã¦å‡ºåŠ›ã«è¿”ã‚‹)
+		//!< “üo—Í (“ü—Í‚Ö‘‚«ž‚Þ‚Æ AI ‚Éˆ—‚³‚ê‚Äo—Í‚É•Ô‚é)
 		hailo_input_vstream InputVstreams;
 		hailo_create_input_vstreams(CNG, std::data(InputVstreamParamsByName), std::size(InputVstreamParamsByName), &InputVstreams);
 
 		hailo_output_vstream OutputVstreams;
 		hailo_create_output_vstreams(CNG, std::data(OutputVstreamParamsByName), std::size(OutputVstreamParamsByName), &OutputVstreams);
 
-		//!< AI ãƒãƒƒãƒˆãƒ¯ãƒ¼ã‚¯ã®ã‚¢ã‚¯ãƒ†ã‚£ãƒ™ãƒ¼ãƒˆ
+		//!< AI ƒlƒbƒgƒ[ƒN‚ÌƒAƒNƒeƒBƒx[ƒg
 		hailo_activated_network_group ActivatedNetworkGroup;
 		hailo_activate_network_group(CNG, nullptr, &ActivatedNetworkGroup);
 
-		//!< æŽ¨è«–é–‹å§‹
+		//!< „˜_ŠJŽn
 		Inference(InputVstreams, OutputVstreams, CapturePath);
 #endif
-		//!< ãƒ«ãƒ¼ãƒ—
+		//!< ƒ‹[ƒv
 		do {
 			Flags[static_cast<size_t>(FLAGS::IsRunning)] = Loop();
-		} while(Flags.all());
+		} while (Flags.all());
 
-		//!< çµ‚äº†ã€ã‚¹ãƒ¬ãƒƒãƒ‰åŒæœŸ
+		//!< I—¹AƒXƒŒƒbƒh“¯Šú
 		Join();
 	}
 
-	//!< ç¶™æ‰¿ã‚¯ãƒ©ã‚¹ã§ã‚ªãƒ¼ãƒãƒ¼ãƒ©ã‚¤ãƒ‰
+	//!< Œp³ƒNƒ‰ƒX‚ÅƒI[ƒo[ƒ‰ƒCƒh
 #ifdef USE_HAILOCPP
-	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream> &In, [[maybe_unused]] std::vector<hailort::OutputVStream> &Out, [[maybe_unused]] std::string_view CapturePath) {}
+	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream>& In, [[maybe_unused]] std::vector<hailort::OutputVStream>& Out, [[maybe_unused]] std::string_view CapturePath) {}
 #else
-	virtual void Inference([[maybe_unused]] hailo_input_vstream &In, [[maybe_unused]] hailo_output_vstream &Out, [[maybe_unused]] std::string_view CapturePath) {}
+	virtual void Inference([[maybe_unused]] hailo_input_vstream& In, [[maybe_unused]] hailo_output_vstream& Out, [[maybe_unused]] std::string_view CapturePath) {}
 #endif
 
-	//!< ã‚¹ãƒ¬ãƒƒãƒ‰åŒæœŸ
+	//!< ƒXƒŒƒbƒh“¯Šú
 	void Join() {
-		for(auto& i : Threads) { 
+		for (auto& i : Threads) {
 			i.join();
 		}
 	}
-	
+
 protected:
 	enum class FLAGS : size_t {
 		IsRunning,
@@ -132,3 +139,4 @@ protected:
 	std::bitset<2> Flags;
 	std::vector<std::thread> Threads;
 };
+
