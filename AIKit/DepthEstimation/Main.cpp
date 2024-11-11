@@ -92,10 +92,11 @@ public:
 			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
 
 			hailo_vstream_info_t Info;
-			hailo_get_input_vstream_info(In, &Info);
+			VERIFY_HAILO_SUCCESS(hailo_get_input_vstream_info(In, &Info));
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
-			hailo_get_input_vstream_frame_size(In, &FrameSize);
+			VERIFY_HAILO_SUCCESS(hailo_get_input_vstream_frame_size(In, &FrameSize));
+			std::cout << "In FrameSize = " << FrameSize << std::endl;
 
 			cv::Mat InAI;
 			//!< スレッド自身に終了判断させる
@@ -121,17 +122,18 @@ public:
 				}
 
 				//!< AI への入力 (書き込み)
-				hailo_vstream_write_raw_buffer(In, InAI.data, InAI.total() * InAI.elemSize());
+				VERIFY_HAILO_SUCCESS(hailo_vstream_write_raw_buffer(In, InAI.data, FrameSize));
 			}
 			});
 
 		//!< AI 出力スレッド
 		Threads.emplace_back([&]() {
 			hailo_vstream_info_t Info;
-			hailo_get_output_vstream_info(Out, &Info);
+			VERIFY_HAILO_SUCCESS(hailo_get_output_vstream_info(Out, &Info));
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
-			hailo_get_output_vstream_frame_size(Out, &FrameSize);
+			VERIFY_HAILO_SUCCESS(hailo_get_output_vstream_frame_size(Out, &FrameSize));
+			std::cout << "Out FrameSize = " << FrameSize << std::endl;
 
 			std::vector<uint8_t> OutAI(FrameSize);
 			//!< スレッド自身に終了判断させる
@@ -139,7 +141,7 @@ public:
 				++OutFrameCount;
 
 				//!< 出力を取得
-				hailo_vstream_read_raw_buffer(Out, std::data(OutAI), std::size(OutAI));
+				VERIFY_HAILO_SUCCESS(hailo_vstream_read_raw_buffer(Out, std::data(OutAI), FrameSize));
 
 				//!< OpenCV 形式へ
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));

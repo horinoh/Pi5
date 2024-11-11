@@ -9,6 +9,7 @@
 #include <thread>
 #include <functional>
 #include <string_view>
+#include <source_location>
 
 //#define USE_HAILOCPP
 #ifdef USE_HAILOCPP
@@ -20,6 +21,14 @@
 #ifdef _WIN64
 #pragma comment(lib, "libhailort.lib")
 #endif
+
+#define BREAKPOINT()
+#if true
+#define VERIFY_HAILO_SUCCESS(X) { const auto HS = (X); if(hailo_status::HAILO_SUCCESS != HS) { std::cerr << std::source_location::current().function_name() << " hailo_status = " << HS << " (0x" << std::hex << static_cast<uint32_t>(HS) << std::dec << ")" << std::dec << std::endl; BREAKPOINT(); } }
+#else
+#define VERIFY_HAILO_SUCCESS(X) (X) 
+#endif
+
 
 class Hailo
 {
@@ -68,17 +77,17 @@ public:
 #else
 		//!< デバイス
 		hailo_device Device;
-		hailo_create_pcie_device(nullptr, &Device);
+		VERIFY_HAILO_SUCCESS(hailo_create_pcie_device(nullptr, &Device));
 
 		//!< ネットワーク
 		hailo_hef Hef;
-		hailo_create_hef_file(&Hef, std::data(HefFile));
+		VERIFY_HAILO_SUCCESS(hailo_create_hef_file(&Hef, std::data(HefFile)));
 		hailo_configure_params_t ConfigureParams;
-		hailo_init_configure_params(Hef, HAILO_STREAM_INTERFACE_PCIE, &ConfigureParams);
+		VERIFY_HAILO_SUCCESS(hailo_init_configure_params(Hef, HAILO_STREAM_INTERFACE_PCIE, &ConfigureParams));
 
 		std::vector<hailo_configured_network_group> ConfiguredNetworkGroups(HAILO_MAX_NETWORK_GROUPS);
 		size_t Count = std::size(ConfiguredNetworkGroups);
-		hailo_configure_device(Device, Hef, &ConfigureParams, std::data(ConfiguredNetworkGroups), &Count);
+		VERIFY_HAILO_SUCCESS(hailo_configure_device(Device, Hef, &ConfigureParams, std::data(ConfiguredNetworkGroups), &Count));
 		ConfiguredNetworkGroups.resize(Count);
 
 		auto& CNG = ConfiguredNetworkGroups.front();
@@ -86,24 +95,24 @@ public:
 		//!< 入出力パラメータ
 		std::vector<hailo_input_vstream_params_by_name_t> InputVstreamParamsByName(HAILO_MAX_STREAM_NAME_SIZE);
 		Count = std::size(InputVstreamParamsByName);
-		hailo_make_input_vstream_params(CNG, true, HAILO_FORMAT_TYPE_UINT8, std::data(InputVstreamParamsByName), &Count);
+		VERIFY_HAILO_SUCCESS(hailo_make_input_vstream_params(CNG, true, HAILO_FORMAT_TYPE_UINT8, std::data(InputVstreamParamsByName), &Count));
 		InputVstreamParamsByName.resize(Count);
 
 		std::vector<hailo_output_vstream_params_by_name_t> OutputVstreamParamsByName(HAILO_MAX_STREAM_NAME_SIZE);
 		Count = std::size(OutputVstreamParamsByName);
-		hailo_make_output_vstream_params(CNG, false, HAILO_FORMAT_TYPE_FLOAT32, std::data(OutputVstreamParamsByName), &Count);
+		VERIFY_HAILO_SUCCESS(hailo_make_output_vstream_params(CNG, false, HAILO_FORMAT_TYPE_FLOAT32, std::data(OutputVstreamParamsByName), &Count));
 		OutputVstreamParamsByName.resize(Count);
 
 		//!< 入出力 (入力へ書き込むと AI に処理されて出力に返る)
 		hailo_input_vstream InputVstreams;
-		hailo_create_input_vstreams(CNG, std::data(InputVstreamParamsByName), std::size(InputVstreamParamsByName), &InputVstreams);
+		VERIFY_HAILO_SUCCESS(hailo_create_input_vstreams(CNG, std::data(InputVstreamParamsByName), std::size(InputVstreamParamsByName), &InputVstreams));
 
 		hailo_output_vstream OutputVstreams;
-		hailo_create_output_vstreams(CNG, std::data(OutputVstreamParamsByName), std::size(OutputVstreamParamsByName), &OutputVstreams);
+		VERIFY_HAILO_SUCCESS(hailo_create_output_vstreams(CNG, std::data(OutputVstreamParamsByName), std::size(OutputVstreamParamsByName), &OutputVstreams));
 
 		//!< AI ネットワークのアクティベート
 		hailo_activated_network_group ActivatedNetworkGroup;
-		hailo_activate_network_group(CNG, nullptr, &ActivatedNetworkGroup);
+		VERIFY_HAILO_SUCCESS(hailo_activate_network_group(CNG, nullptr, &ActivatedNetworkGroup));
 
 		//!< 推論開始
 		Inference(InputVstreams, OutputVstreams, CapturePath);
