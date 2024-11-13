@@ -127,7 +127,7 @@ public:
 
 				//!< AI ‚Ö‚Ì“ü—Í (‘‚«‚İ)
 				VERIFY_HAILO_SUCCESS(hailo_vstream_write_raw_buffer(In, InAI.data, FrameSize));
-				std::cout << "In Write Size = " << FrameSize << std::endl;
+				//std::cout << "[" << InFrameCount << "] In Write Size = " << FrameSize << std::endl;
 			}
 			});
 
@@ -148,7 +148,7 @@ public:
 
 				//!< o—Í‚ğæ“¾
 				VERIFY_HAILO_SUCCESS(hailo_vstream_read_raw_buffer(Out, std::data(OutAI), FrameSize));
-				std::cout << "Out Read Size = " << FrameSize << std::endl;
+				//std::cout << "[" << OutFrameCount << "] Out Read Size = " << FrameSize << std::endl;
 
 				//!< OpenCV Œ`®‚Ö
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
