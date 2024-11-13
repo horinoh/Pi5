@@ -1,9 +1,10 @@
 #pragma once
 
 #include <bitset>
-#if false
+#ifdef _WIN64
 #include <format>
 #else
+//!< GCC は std::format 未対応
 #include <sstream>
 #endif
 #include <thread>
@@ -36,7 +37,7 @@ public:
 	//!< カメラ画像を取得するのに必要な、cv::VideoCapture() へ引数 (文字列) を作成
 	//!< (OpenCV では BGR なので "format=BGR" を指定する必要がある)
 	static std::string GetLibCameGSTStr(const int Width, const int Height, const int FPS) {
-#if false
+#ifdef _WIN64
 		return std::format("libcamerasrc ! video/x-raw, width={}, height={}, framerate={}/1, format=BGR, ! appsink", Width, Height, FPS);
 #else
 		std::stringstream SS;
@@ -45,7 +46,7 @@ public:
 #endif
 	}
 
-	virtual void Start(std::string_view HefFile, std::string_view CapturePath, std::function<bool()> Loop) {
+	virtual void Start(std::string_view HefFile, std::string_view VideoPath, std::function<bool()> Loop) {
 		Flags.set(static_cast<size_t>(FLAGS::IsRunning));
 		Flags.set(static_cast<size_t>(FLAGS::HasInput));
 
@@ -73,7 +74,7 @@ public:
 		const auto ActivatedNetworkGroup = ConfiguredNetworkGroup->activate();
 
 		//!< 推論開始
-		Inference(InputVstreams.value(), OutputVstreams.value(), CapturePath);
+		Inference(InputVstreams.value(), OutputVstreams.value(), VideoPath);
 #else
 		//!< デバイス
 		hailo_device Device;
@@ -104,18 +105,18 @@ public:
 		OutputVstreamParamsByName.resize(Count);
 
 		//!< 入出力 (入力へ書き込むと AI に処理されて出力に返る)
-		hailo_input_vstream InputVstreams;
-		VERIFY_HAILO_SUCCESS(hailo_create_input_vstreams(CNG, std::data(InputVstreamParamsByName), std::size(InputVstreamParamsByName), &InputVstreams));
+		std::vector<hailo_input_vstream> InputVstreams(std::size(InputVstreamParamsByName));
+		VERIFY_HAILO_SUCCESS(hailo_create_input_vstreams(CNG, std::data(InputVstreamParamsByName), std::size(InputVstreamParamsByName), std::data(InputVstreams)));
 
-		hailo_output_vstream OutputVstreams;
-		VERIFY_HAILO_SUCCESS(hailo_create_output_vstreams(CNG, std::data(OutputVstreamParamsByName), std::size(OutputVstreamParamsByName), &OutputVstreams));
+		std::vector<hailo_output_vstream> OutputVstreams(std::size(OutputVstreamParamsByName));
+		VERIFY_HAILO_SUCCESS(hailo_create_output_vstreams(CNG, std::data(OutputVstreamParamsByName), std::size(OutputVstreamParamsByName), std::data(OutputVstreams)));
 
 		//!< AI ネットワークのアクティベート
 		hailo_activated_network_group ActivatedNetworkGroup;
 		VERIFY_HAILO_SUCCESS(hailo_activate_network_group(CNG, nullptr, &ActivatedNetworkGroup));
 
 		//!< 推論開始
-		Inference(InputVstreams, OutputVstreams, CapturePath);
+		Inference(InputVstreams, OutputVstreams, VideoPath);
 #endif
 		//!< ループ
 		do {
@@ -128,9 +129,9 @@ public:
 
 	//!< 継承クラスでオーバーライド
 #ifdef USE_HAILOCPP
-	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream>& In, [[maybe_unused]] std::vector<hailort::OutputVStream>& Out, [[maybe_unused]] std::string_view CapturePath) {}
+	virtual void Inference([[maybe_unused]] std::vector<hailort::InputVStream>& InVS, [[maybe_unused]] std::vector<hailort::OutputVStream>& OutVS, [[maybe_unused]] std::string_view VideoPath) {}
 #else
-	virtual void Inference([[maybe_unused]] hailo_input_vstream& In, [[maybe_unused]] hailo_output_vstream& Out, [[maybe_unused]] std::string_view CapturePath) {}
+	virtual void Inference([[maybe_unused]] std::vector<hailo_input_vstream>& InVS, [[maybe_unused]] std::vector<hailo_output_vstream>& OutVS, [[maybe_unused]] std::string_view VideoPath) {}
 #endif
 
 	//!< スレッド同期

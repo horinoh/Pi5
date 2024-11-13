@@ -13,10 +13,10 @@ private:
 
 public:
 #ifdef USE_HAILOCPP
-	virtual void Inference(std::vector<hailort::InputVStream>& In, std::vector<hailort::OutputVStream>& Out, std::string_view CapturePath) override {
+	virtual void Inference(std::vector<hailort::InputVStream>& In, std::vector<hailort::OutputVStream>& Out, std::string_view VideoPath) override {
 		//!< AI 入力スレッド
 		Threads.emplace_back([&]() {
-			cv::VideoCapture Capture(std::data(CapturePath));
+			cv::VideoCapture Capture(std::data(VideoPath));
 			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
 
 			auto& Front = In.front();
@@ -85,18 +85,22 @@ public:
 			});
 	}
 #else
-	virtual void Inference(hailo_input_vstream& In, hailo_output_vstream& Out, std::string_view CapturePath) override {
+	virtual void Inference(std::vector<hailo_input_vstream>& InVS, std::vector<hailo_output_vstream>& OutVS, std::string_view VideoPath) override {
+		std::cout << "InVS[" << std::size(InVS) << "]" << std::endl;
+		std::cout << "OutVS[" << std::size(OutVS) << "]" << std::endl;
+		
 		//!< AI 入力スレッド
 		Threads.emplace_back([&]() {
-			cv::VideoCapture Capture(std::data(CapturePath));
+			cv::VideoCapture Capture(std::data(VideoPath));
 			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
+
+			auto& In = InVS[0];
 
 			hailo_vstream_info_t Info;
 			VERIFY_HAILO_SUCCESS(hailo_get_input_vstream_info(In, &Info));
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
 			VERIFY_HAILO_SUCCESS(hailo_get_input_vstream_frame_size(In, &FrameSize));
-			std::cout << "In FrameSize = " << FrameSize << std::endl;
 
 			cv::Mat InAI;
 			//!< スレッド自身に終了判断させる
@@ -123,17 +127,19 @@ public:
 
 				//!< AI への入力 (書き込み)
 				VERIFY_HAILO_SUCCESS(hailo_vstream_write_raw_buffer(In, InAI.data, FrameSize));
+				std::cout << "In Write Size = " << FrameSize << std::endl;
 			}
 			});
 
 		//!< AI 出力スレッド
 		Threads.emplace_back([&]() {
+			auto& Out = OutVS[0];
+
 			hailo_vstream_info_t Info;
 			VERIFY_HAILO_SUCCESS(hailo_get_output_vstream_info(Out, &Info));
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
 			VERIFY_HAILO_SUCCESS(hailo_get_output_vstream_frame_size(Out, &FrameSize));
-			std::cout << "Out FrameSize = " << FrameSize << std::endl;
 
 			std::vector<uint8_t> OutAI(FrameSize);
 			//!< スレッド自身に終了判断させる
@@ -142,6 +148,7 @@ public:
 
 				//!< 出力を取得
 				VERIFY_HAILO_SUCCESS(hailo_vstream_read_raw_buffer(Out, std::data(OutAI), FrameSize));
+				std::cout << "Out Read Size = " << FrameSize << std::endl;
 
 				//!< OpenCV 形式へ
 				const auto CVOutAI = cv::Mat(Shape.height, Shape.width, CV_32F, std::data(OutAI));
@@ -195,8 +202,8 @@ int main(int argc, char* argv[]) {
 	//!< 入力キャプチャファイルを引数から取得、明示的に指定が無い場合はカメラ画像を使用
 	//!< (カメラ画像は VideoCapture() へ Gstreamer の引数を渡す形で作成)
 	const auto Cam = Hailo::GetLibCameGSTStr(1280, 960, 30);
-	auto CapturePath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
-	std::cout << "Capturing : \"" << CapturePath << "\"" << std::endl;
+	auto VideoPath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
+	std::cout << "Capturing : \"" << VideoPath << "\"" << std::endl;
 
 	//!< 深度推定クラス
 	DepthEstimation DepEst;
@@ -212,7 +219,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 	//!< 推定開始、ループ
-	DepEst.Start("scdepthv3.hef", CapturePath,
+	DepEst.Start("scdepthv3.hef", VideoPath,
 		[&]() {
 			//!< 深度推定クラスからカラーマップ、深度マップを取得
 			const auto& CM = DepEst.GetColorMap();

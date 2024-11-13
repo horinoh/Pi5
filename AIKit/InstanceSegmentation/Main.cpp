@@ -12,18 +12,22 @@ private:
 	using Super = Hailo;
 
 public:
-	virtual void Inference(hailo_input_vstream& In, hailo_output_vstream& Out, std::string_view CapturePath) override {
+	virtual void Inference(std::vector<hailo_input_vstream>& InVS, std::vector<hailo_output_vstream>& OutVS, std::string_view VideoPath) override {
+		std::cout << "InVS[" << std::size(InVS) << "]" << std::endl;
+		std::cout << "OutVS[" << std::size(OutVS) << "]" << std::endl;
+
 		//!< AI 入力スレッド
 		Threads.emplace_back([&]() {
-			cv::VideoCapture Capture(std::data(CapturePath));
+			cv::VideoCapture Capture(std::data(VideoPath));
 			std::cout << Capture.get(cv::CAP_PROP_FRAME_WIDTH) << " x " << Capture.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << Capture.get(cv::CAP_PROP_FPS) << std::endl;
+
+			auto& In = InVS[0];
 
 			hailo_vstream_info_t Info;
 			VERIFY_HAILO_SUCCESS(hailo_get_input_vstream_info(In, &Info));
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
 			VERIFY_HAILO_SUCCESS(hailo_get_input_vstream_frame_size(In, &FrameSize));
-			std::cout << "In FrameSize = " << FrameSize << std::endl;
 
 			cv::Mat InAI;
 			//!< スレッド自身に終了判断させる
@@ -43,12 +47,12 @@ public:
 				//!< リサイズ
 				if (static_cast<uint32_t>(ColorMap.cols) != Shape.width || static_cast<uint32_t>(ColorMap.rows) != Shape.height) {
 					//!< 比率を維持したままモデルサイズを満たすようにするファクタ
-					const auto Factor = std::max<float>(ColorMap.cols / Shape.width, ColorMap.rows / Shape.height);
-					std::cout << "Factor = " << Factor << std::endl;
+					const auto Factor = std::max(static_cast<float>(ColorMap.cols) / Shape.width, static_cast<float>(ColorMap.rows) / Shape.height);
+					std::cout << "\tFactor = " << Factor << std::endl;
 
 					//!< 比率を維持したリサイズ
-					cv::resize(ColorMap, ColorMap, cv::Size(ColorMap.cols / Factor, ColorMap.rows / Factor), cv::INTER_AREA);
-					std::cout << "Resize = " << ColorMap.cols << " x " << ColorMap.rows << std::endl;
+					cv::resize(ColorMap, ColorMap, cv::Size(static_cast<int>(ColorMap.cols / Factor), static_cast<int>(ColorMap.rows / Factor)), cv::INTER_AREA);
+					std::cout << "\tResize = " << ColorMap.cols << " x " << ColorMap.rows << std::endl;
 
 					//!< モデルサイズになるように黒帯で埋める
 					cv::Mat Padded;
@@ -56,28 +60,30 @@ public:
 						0, std::max<int>(ColorMap.rows - Shape.height, Shape.height - ColorMap.rows),
 						0, std::max<int>(ColorMap.cols - Shape.width, Shape.width - ColorMap.cols),
 						cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
-					std::cout << "Pad = " << ColorMap.cols << " x " << ColorMap.rows << std::endl;
+					std::cout << "\tPad = " << ColorMap.cols << " x " << ColorMap.rows << std::endl;
 				}
 				else {
 					InAI = ColorMap.clone();
 				}
-				std::cout << "In = " << InAI.cols << " x " << InAI.rows << std::endl;
+				std::cout << "\tIn = " << InAI.cols << " x " << InAI.rows << std::endl;
 
-				std::cout << "Mat Size = " << InAI.total() * InAI.elemSize() << std::endl;
+				std::cout << "\tMat Size = " << InAI.total() * InAI.elemSize() << std::endl;
 
 				//!< AI への入力 (書き込み)
 				VERIFY_HAILO_SUCCESS(hailo_vstream_write_raw_buffer(In, InAI.data, FrameSize));
+				std::cout << "[" << InFrameCount << "] In Write Size = " << FrameSize << std::endl;
 			}
 			});
 
 		//!< AI 出力スレッド
 		Threads.emplace_back([&]() {
+			auto& Out = OutVS[0];
+
 			hailo_vstream_info_t Info;
 			VERIFY_HAILO_SUCCESS(hailo_get_output_vstream_info(Out, &Info));
 			const auto& Shape = Info.shape;
 			size_t FrameSize;
 			VERIFY_HAILO_SUCCESS(hailo_get_output_vstream_frame_size(Out, &FrameSize));
-			std::cout << "Out FrameSize = " << FrameSize << std::endl;
 
 			std::vector<uint8_t> OutAI(FrameSize);
 			//!< スレッド自身に終了判断させる
@@ -86,12 +92,15 @@ public:
 
 				//!< 出力を取得
 				VERIFY_HAILO_SUCCESS(hailo_vstream_read_raw_buffer(Out, std::data(OutAI), FrameSize));
+				std::cout << "[" << OutFrameCount << "] Out Read Size = " << FrameSize << std::endl;
 
 				//!< 先頭 uint16_t に「検出数」が格納されている
 				const auto Count = *reinterpret_cast<uint16_t*>(std::data(OutAI));
+				std::cout << "\tDetection Count = " << Count << std::endl;
 				//!< 「検出数」分オフセット
 				auto Offset = sizeof(Count);
 
+#if 0
 				//!< 検出格納先
 				std::vector<hailo_detection_with_byte_mask_t> Detections;
 				Detections.reserve(Count);
@@ -101,7 +110,6 @@ public:
 					Detections.emplace_back(*Detection);
 					Offset += sizeof(*Detection) + Detection->mask_size;
 				}
-
 				{
 					std::lock_guard Lock(OutMutex);
 
@@ -111,10 +119,10 @@ public:
 						//i.score;	
 
 						//!< ボックスサイズはピクセルではなく、画面に対する比率で格納されている
-						const int BoxL = i.box.x_min * Shape.width;
-						const int BoxT = i.box.y_min * Shape.height;
-						const int BoxW = ceil((i.box.x_max - i.box.x_min) * Shape.width);
-						const int BoxH = ceil((i.box.y_max - i.box.y_min) * Shape.height);
+						const auto BoxL = static_cast<int>(i.box.x_min * Shape.width);
+						const auto BoxT = static_cast<int>(i.box.y_min * Shape.height);
+						const auto BoxW = static_cast<int>(ceil((i.box.x_max - i.box.x_min) * Shape.width));
+						const auto BoxH = static_cast<int>(ceil((i.box.y_max - i.box.y_min) * Shape.height));
 						for (auto h = 0; h < BoxH; ++h) {
 							for (auto w = 0; w < BoxW; ++w) {
 								if (i.mask[h * BoxW + w]) {
@@ -125,6 +133,7 @@ public:
 						cv::rectangle(DetectionMap, cv::Rect(BoxL, BoxT, BoxW, BoxH), cv::Vec3b(0, 255, 0), 1);
 					}
 				}
+#endif
 			}
 			});
 	}
@@ -154,8 +163,8 @@ int main(int argc, char* argv[]) {
 	//!< 入力キャプチャファイルを引数から取得、明示的に指定が無い場合はカメラ画像を使用
 	//!< (カメラ画像は VideoCapture() へ Gstreamer の引数を渡す形で作成)
 	const auto Cam = Hailo::GetLibCameGSTStr(1280, 960, 30);
-	auto CapturePath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
-	std::cout << "Capturing : \"" << CapturePath << "\"" << std::endl;
+	auto VideoPath = std::string_view(std::size(Args) > 1 ? Args[1] : std::data(Cam));
+	std::cout << "Capturing : \"" << VideoPath << "\"" << std::endl;
 
 	//!< セグメンテーションクラス
 	InstanceSegmentation InstSeg;
@@ -165,7 +174,7 @@ int main(int argc, char* argv[]) {
 	const auto LSize = cv::Size(320, 240); //!< 左 (右も同じ) のサイズ 
 
 	//!< 推定開始、ループ	
-	InstSeg.Start("yolov5m_seg.hef", CapturePath,
+	InstSeg.Start("yolov5m_seg.hef", VideoPath,
 		[&]() {
 			//!< 深度推定クラスからカラーマップ、深度マップを取得
 			const auto& CM = InstSeg.GetColorMap();
