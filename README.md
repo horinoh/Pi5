@@ -7,9 +7,9 @@
 - デバイス (Pi5)、OS (64bit)、ストレージ (SD) を選択
 - カスタマイズでは「設定を編集する」
     - 「一般」タブ
-        - 「ホスト名」にチェック
+        - 「ホスト名」にチェック、ホスト名を任意に決める
             ~~~~
-            ホスト名    raspberrypi.local
+            raspberrypi.local
             ~~~~
         - 「ユーザ名とパスワードを設定する」にチェック
             ~~~
@@ -95,7 +95,7 @@
 - 更新
     ~~~
     $sudo apt update
-	$sudo apt full-upgrade
+	$sudo apt full-upgrade -y
     ~~~
 - ファームウェア確認
     ~~~
@@ -163,7 +163,7 @@
 #### full-upgrade
 - インストール済みのパッケージを更新、(必要に応じて)削除
     ~~~
-    $sudo apt full-upgrade
+    $sudo apt full-upgrade -y
     ~~~
 
 ### DPKG
@@ -190,6 +190,16 @@
     ~~~
 
 ## カメラ
+- 設定ファイル /boot/firmware/config.txt
+    ~~~
+    # 純正カメラ (imx500は純正扱いなので 1 で良い)
+    camera_auto_detect=1
+    ~~~
+    ~~~
+    # 純正カメラ以外
+    camera_auto_detect=0
+    dtoverlay=XXX
+    ~~~
 - カメラをリストアップ
     ~~~
     $libcamera-hello --list-cameras
@@ -218,11 +228,12 @@
 ## インストールしたもの等
 
 ### [AI Kit](https://github.com/horinoh/Pi5/tree/master/AIKit)
+### [IMX500](https://github.com/horinoh/Pi5/tree/master/IMX500)
 
 ### emacs
 - インストール
     ~~~
-    $sudo apt-get install -y emacs
+    $sudo apt install -y emacs
     ~~~
 - 設定 (~/.emacs.d/init.el を作成)
     ~~~
@@ -326,9 +337,14 @@
 
 ### cmake
 - AI Kit セットアップでインストールされる
+    ~~~
+    $sudo apt install cmake -y
+    ~~~
 ### opencv
-- デフォルトでインストールされる? AI Kit セットアップでインストールされる?
-
+- AI Kit セットアップでインストールされる
+    ~~~
+    $sudo apt install libopencv-dev -y
+    ~~~
 ### libvulkan1
 - デフォルトでインストールされる
 ### meson
