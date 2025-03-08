@@ -93,6 +93,11 @@
     - scdepthv3.hef
     - yolov5m-seg.hef
 
+### トラブルシューティング
+- ドライバのバージョンで怒られる場合
+	- 更新後はリブートをしてみる
+	- .hef を DL しなおしてみる
+
 ### HailoRT (Windowsの場合)
 - [HailoRT](https://hailo.ai/developer-zone/software-downloads/) Windows 版を選択してダウンロード
 	- C:\Program Files\HailoRT 等にインストールされるので、ここでは (インストール先フォルダ) 環境変数 HAILORT_SDK_PATH を作成する
@@ -109,13 +114,13 @@
 #### Depth Estimation
 - scdepthv3.hef を [ここ](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/PUBLIC_MODELS.rst) からダウンロードする
     ~~~
-    $wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.13.0/hailo8l/scdepthv3.hef
+    $wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.14.0/hailo8l/scdepthv3.hef
     ~~~
 
 #### Segmentation
 - yolov5m-seg.hef を [ここ](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/PUBLIC_MODELS.rst) からダウンロードする
     ~~~
-    wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.13.0/hailo8l/yolov5m_seg.hef
+    wget https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v2.14.0/hailo8l/yolov5m_seg.hef
     ~~~
 
 <!--
